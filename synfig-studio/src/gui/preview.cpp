@@ -8,7 +8,7 @@
 **	Copyright (c) 2002-2005 Robert B. Quattlebaum Jr., Adrian Bentley
 **	Copyright (c) 2007 Chris Moore
 **	Copyright (c) 2011 Nikita Kitaev
-**	Coypright (c) 2012 Yu Chen
+**	Copyright (c) 2012 Yu Chen
 **
 **	This package is free software; you can redistribute it and/or
 **	modify it under the terms of the GNU General Public License as
@@ -263,10 +263,12 @@ void studio::Preview::clear()
 	frames.clear();
 }
 
-etl::handle<synfig::Canvas> studio::Preview::get_canvas() const
+const etl::handle<synfig::Canvas>&
+studio::Preview::get_canvas() const
 	{return canvasview->get_canvas();}
 
-etl::handle<studio::CanvasView> studio::Preview::get_canvasview() const
+const etl::loose_handle<CanvasView>&
+studio::Preview::get_canvasview() const
 	{return canvasview;}
 
 static void free_guint8(const guint8 *mem)

@@ -51,7 +51,7 @@
 #endif
 
 
-_ETL_BEGIN_NAMESPACE
+namespace etl {
 
 // Forward Declarations
 template <class T> class handle;
@@ -99,7 +99,7 @@ public:
 	}
 
 	//! Decrease reference counter without deletion of object
-	//! Returns \c false if references exeed and object should be deleted
+	//! Returns \c false if references exceed and object should be deleted
 	virtual bool unref_inactive()const
 	{
 		return (bool)(--refcount);
@@ -201,7 +201,7 @@ public:
 	{
 		if(x.get()==obj)
 			return *this;
-		// add referense before detach
+		// add reference before detach
 		pointer xobj(x.get());
 		if(xobj) xobj->ref();
 		detach();
@@ -831,7 +831,7 @@ template <class T>		   bool operator<(const loose_handle<T>&  lhs,const T*				 r
 template <class T>		   bool operator<(const T*				  lhs,const handle<T>&		 rhs) { return (lhs		 <rhs.get());  }
 template <class T>		   bool operator<(const T*				  lhs,const loose_handle<T>& rhs) { return (lhs		 <rhs.get());  }
 
-_ETL_END_NAMESPACE
+};
 
 /* === E N D =============================================================== */
 

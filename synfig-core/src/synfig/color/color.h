@@ -119,7 +119,7 @@ public:
 	//! Converts a ColorReal \a c (0.0-1.0) into a 2 character hex string (00-ff)
 	static const String real2hex(ColorReal c);
 
-	//! Returns the color as a 6 character hex sting
+	//! Returns the color as a 6 character hex string
 	inline const String get_hex()const;
 
 	//! Sets the color's R, G, and B from a 3 or 6 character hex string
@@ -264,6 +264,7 @@ public:
 		BLEND_MULTIPLY=6,			//!< Simple A*B.
 		BLEND_DIVIDE=7,				//!< Simple B/A
 		BLEND_ADD=4,				//!< Simple A+B.
+		BLEND_ADD_COMPOSITE=22,		//!< Simple A+B (without cropping the outer part).
 		BLEND_SUBTRACT=5,			//!< Simple A-B.
 		BLEND_DIFFERENCE=18,		//!< Simple |A-B|.
 		BLEND_BRIGHTEN=2,			//!< If composite is brighter than B, use composite. B otherwise.
@@ -277,7 +278,7 @@ public:
 		BLEND_ALPHA_DARKEN=15,		//!< \deprecated If A is more opaque than B, use B
 		BLEND_ALPHA_OVER=19,		//!< \deprecated multiply alphas and then straight blends using the amount
 
-		BLEND_END=22,				//!< \internal
+		BLEND_END=23,				//!< \internal
 		BLEND_BY_LAYER=999			//! Used to let the layer decides what Blend Method use by
 									//! default when the layer is created
 	};
@@ -310,12 +311,12 @@ public:
 
 		BLEND_METHODS_ASSOCIATIVE = 0
 			| (1 << BLEND_COMPOSITE)
-			| (1 << BLEND_ADD)
+			| (1 << BLEND_ADD_COMPOSITE)
 			| (1 << BLEND_BEHIND)
 			| (1 << BLEND_ALPHA_DARKEN),
 
 		BLEND_METHODS_COMMUTATIVE = 0
-			| (1 << BLEND_ADD),
+			| (1 << BLEND_ADD_COMPOSITE),
 
 		BLEND_METHODS_ALL = (1 << BLEND_END) - 1
 	};

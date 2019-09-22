@@ -52,8 +52,6 @@ src/modules/mod_bmp/trgt_bmp.h
 src/modules/mod_dv/main.cpp
 src/modules/mod_dv/trgt_dv.cpp
 src/modules/mod_dv/trgt_dv.h
-src/modules/mod_example/filledrect.cpp
-src/modules/mod_example/filledrect.h
 src/modules/mod_example/main.cpp
 src/modules/mod_example/metaballs.cpp
 src/modules/mod_example/metaballs.h
@@ -298,6 +296,7 @@ src/synfig/rendering/software/rendererdraftsw.cpp
 src/synfig/rendering/software/rendererlowressw.cpp
 src/synfig/rendering/software/renderersafe.cpp
 src/synfig/rendering/software/renderersw.cpp
+src/synfig/rendering/software/rendererpreviewsw.cpp
 src/synfig/savecanvas.cpp
 src/synfig/savecanvas.h
 src/synfig/segment.h

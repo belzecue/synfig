@@ -105,7 +105,7 @@
  *
  * 0.8: git 82baee2702a65a9866f3dc4a28ef163dcf43795a
  *
- *      Added "homogenous" link to "BLineCalcVertex", "BLineCalcTangent"
+ *      Added "homogeneous" link to "BLineCalcVertex", "BLineCalcTangent"
  *      and "BLineCalcWidth" valuenodes.
  *
  * 0.9: git 6922776b8129fdae6cb42953b2715decc810786c
@@ -247,7 +247,7 @@ private:
 	//! Layer Signal Connection database. Seems to be unused.
 	std::map<etl::loose_handle<Layer>,std::vector<sigc::connection> > connections_;
 
-	//! Value to store temporarly the grow value for the child outline type layers
+	//! Value to store temporarily the grow value for the child outline type layers
 	/*! \see get_grow_value set_grow_value */
 	Real outline_grow;
 
@@ -592,20 +592,27 @@ public:
 	//! Retireves sorted double queue of Layers and Context of the first layer with rendering parameters
 	Context get_context_sorted(const ContextParams &params, CanvasBase &out_queue) const;
 
+	int indexof(const const_iterator &iter) const;
+	iterator byindex(int index);
+	const_iterator byindex(int index) const;
+	
+	iterator find_index(const etl::handle<Layer> &layer, int &index);
+	const_iterator find_index(const etl::handle<Layer> &layer, int &index) const;
+	
 	//! Returns the last Canvas layer queue iterator. Notice that it
-	/*! overrides the std::end() member that would return an interator
+	/*! overrides the std::end() member that would return an iterator
 	 * just past the last element of the queue.*/
 	iterator end();
 	//! Returns the last Canvas layer queue const_iterator. Notice that it
-	/*! overrides the std::end() member that would return an interator
+	/*! overrides the std::end() member that would return an iterator
 	 * just past the last element of the queue.*/
 	const_iterator end()const;
 	//! Returns the last Canvas layer queue reverse iterator. Notice that it
-	/*! overrides the std::rbegin() member that would return an interator
+	/*! overrides the std::rbegin() member that would return an iterator
 	 * just past the last element of the queue.*/
 	reverse_iterator rbegin();
 	//! Returns the last Canvas layer queue reverse const iterator. Notice that it
-	/*! overrides the std::rbegin() member that would return an interator
+	/*! overrides the std::rbegin() member that would return an iterator
 	 * just past the last element of the queue.*/
 	const_reverse_iterator rbegin()const;
 	//! Returns last layer in Canvas layer stack
@@ -615,7 +622,7 @@ public:
 	//! Inserts a layer just before the last layer.
 	//! \see end(), insert(iterator iter,etl::handle<Layer> x)
 	void push_back(etl::handle<Layer> x);
-	//! Inserts a layer just at the beggining of the Canvas layer dqueue
+	//! Inserts a layer just at the beginning of the Canvas layer dqueue
 	void push_front(etl::handle<Layer> x);
 	//! Inserts a layer in the last position of the Canvas layer dqueue
 	//! Uses the standard methods and doesn't perform any parentship

@@ -80,6 +80,7 @@
 #include "render.h"
 #include "duckmatic.h"
 #include "timemodel.h"
+#include "helpers.h"
 #include "cellrenderer/cellrenderer_timetrack.h"
 #include "docks/dockable.h"
 #include "dialogs/canvasoptions.h"
@@ -220,6 +221,8 @@ public:
 
 	void set_background_rendering_toggle(bool flag) { background_rendering_toggle->set_active(flag); }
 
+	void grab_focus();
+
 	/*
  -- ** -- P R I V A T E   D A T A ---------------------------------------------
 	*/
@@ -258,6 +261,7 @@ private:
 
 	std::map<synfig::String,Glib::RefPtr<Glib::ObjectBase> > ref_obj_book_;
 	std::map<synfig::String,Gtk::Widget*> ext_widget_book_;
+	std::map<synfig::String,AdjustmentGroup::Handle> adjustment_group_book_;
 
 	//! The time_window adjustment governs the position of the time window on the whole time line
 	etl::handle<TimeModel> time_model_;
@@ -274,7 +278,7 @@ private:
 	Gtk::Button *stopbutton;
 	Gtk::ToggleToolButton *background_rendering_button;
 	Gtk::ToolButton *refreshbutton;
-	Gtk::ToggleToolButton *draft_button;
+	Gtk::ComboBoxText *render_combobox;
 	Gtk::VBox *timebar;
 	Gtk::Toolbar *displaybar;
 	Widget_Enum *widget_interpolation;
@@ -309,6 +313,9 @@ private:
 	//! Shows current time and allows edition
 	Widget_Time *current_time_widget;
 	void on_current_time_widget_changed();
+
+	//on end time changed
+	void on_set_end_time_widget_changed();
 
 	//! Time slider class. Same than the Time track panel
 	Widget_CanvasTimeslider *timeslider;
@@ -388,7 +395,7 @@ private:
 public:
 
 	CanvasProperties canvas_properties;
-	CanvasOptions canvas_options;
+	CanvasOptions *canvas_options;
 	RenderSettings render_settings;
 	Dialog_Waypoint waypoint_dialog;
 	Dialog_Keyframe keyframe_dialog;
@@ -454,13 +461,13 @@ private:
 	void toggle_animatebutton();
 	void toggle_timetrackbutton();
 
-	void toggle_draft_render();
+	void toggle_render_combobox();
 
 	void on_play_timeout();
-	
+
 	void interpolation_refresh();
 	void on_interpolation_changed();
-	
+
 	static void save_all();
 
 	/*
@@ -499,13 +506,16 @@ public:
 	Gtk::Widget* get_ext_widget(const synfig::String& x);
 	void set_ext_widget(const synfig::String& x, Gtk::Widget* y);
 
+	AdjustmentGroup::Handle get_adjustment_group(const synfig::String& x);
+	void set_adjustment_group(const synfig::String& x, AdjustmentGroup::Handle y);
+
 	Gtk::UIManager::ui_merge_id get_popup_id();
 	void set_popup_id(Gtk::UIManager::ui_merge_id popup_id);
 	Gtk::UIManager::ui_merge_id get_toolbar_id();
 	void set_toolbar_id(Gtk::UIManager::ui_merge_id toolbar_id);
 
 	//std::map<synfig::String,Gtk::Widget*>& tree_view_book() { return tree_view_book_; }
-	//std::map<synfig::String,Gtk::Widget*>& ext_widget_book() { return tree_view_book_; }
+	//std::map<synfig::String,Gtk::Widget*>& ext_widget_book() { return ext_widget_book_; }
 
 	//! Pop up menu for the main menu and the caret menu (not tools and not the bezier ones).
 	/*! Signal handler for work_area->signal_popup_menu */
@@ -547,10 +557,10 @@ public:
 	void set_time(synfig::Time t) { time_model()->set_time(t); }
 	synfig::Time get_time() { return time_model()->get_time(); }
 
-	etl::handle<synfig::Canvas> get_canvas()const { return canvas_interface_->get_canvas(); }
-	etl::handle<Instance> get_instance()const { return instance_; }
+	const etl::handle<synfig::Canvas>& get_canvas()const { return canvas_interface_->get_canvas(); }
+	const etl::loose_handle<Instance>& get_instance()const { return instance_; }
 
-	etl::handle<synfigapp::CanvasInterface> canvas_interface() { return canvas_interface_; }
+	const etl::handle<synfigapp::CanvasInterface>& canvas_interface() { return canvas_interface_; }
 	etl::handle<const synfigapp::CanvasInterface> canvas_interface()const { return canvas_interface_; }
 
 	void add_actions_to_menu(Gtk::Menu *menu,   const synfigapp::Action::ParamList &param_list, synfigapp::Action::Category category=synfigapp::Action::CATEGORY_ALL)const;

@@ -95,7 +95,7 @@ public:
 	Real z_range_position;
 	//! Defines the depth of the range of the Z_Depth visibility
 	Real z_range_depth;
-	//! Layers with z_Depth inside transition are partially visibile
+	//! Layers with z_Depth inside transition are partially visible
 	Real z_range_blur;
 
 	explicit ContextParams(bool render_excluded_contexts = false):
@@ -136,10 +136,16 @@ public:
 		IndependentContext(x), params(context.params) { }
 
 	//! Returns next iterator.
-	Context get_next()const { return Context(*this+1, params); }
+	Context get_next() const {
+		IndependentContext c(*this);
+		return Context(++c, params);
+	}
 
 	//! Returns previous iterator.
-	Context get_previous()const { return Context(*this-1, params); }
+	Context get_previous() const {
+		IndependentContext c(*this);
+		return Context(--c, params);
+	}
 
 	//! Get rendering parameters.
 	const ContextParams& get_params()const { return params; }

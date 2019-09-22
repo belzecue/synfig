@@ -6,14 +6,18 @@
 ## TODO: optional static linking?
 add_library(synfig SHARED "")
 
+message(STATUS "MLT DIR: ${MLT_INCLUDE_DIRS}")
+
 target_include_directories(synfig
-    SYSTEM BEFORE PUBLIC
+#    SYSTEM BEFORE PUBLIC
+SYSTEM PUBLIC
+        ${LIBXML_INCLUDE_DIRS}
+PUBLIC
         ${SIGCPP_INCLUDE_DIRS}
         ${GLIBMM_INCLUDE_DIRS}
         ${GIOMM_INCLUDE_DIRS}
         ${CAIRO_INCLUDE_DIRS}
         ${PANGO_INCLUDE_DIRS}
-        ${LIBXML_INCLUDE_DIRS}
         ${MLT_INCLUDE_DIRS}
         ${FFTW_INCLUDE_DIRS}
 )
@@ -67,11 +71,11 @@ target_sources(synfig
         "${CMAKE_CURRENT_LIST_DIR}/filecontainerzip.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/zstreambuf.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/valueoperations.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/mesh.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/soundprocessor.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/canvasfilenaming.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/token.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/threadpool.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/curve.cpp"
 )
 
 ## these were added seprately in autotools build, preserving this for now
@@ -116,7 +120,7 @@ include(valuenodes/CMakeLists.txt)
 include(debug/CMakeLists.txt)
 
 target_link_libraries(synfig
-    PRIVATE
+    PUBLIC
         ${SIGCPP_LIBRARIES}
         ${GLIBMM_LIBARIES}
         ${GIOMM_LIBRARIES}

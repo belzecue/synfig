@@ -161,7 +161,6 @@ class studio::StateStar_Context : public sigc::trackable
 	Gtk::Label angle_offset_label;
 	Glib::RefPtr<Gtk::Adjustment> angle_offset_adj;
 	Gtk::SpinButton	angle_offset_spin;
-	Gtk::HBox angle_offset_box;
 
 	// regular polygon
 	Gtk::Label regular_polygon_label;
@@ -424,10 +423,10 @@ StateStar_Context::load_settings()
 		else
 			set_radius_ratio(0.5);
 
-		if(settings.get_value("star.angle_offset",value))
-			set_angle_offset(atof(value.c_str()));
-		else
-			set_angle_offset(0);
+		//if(settings.get_value("star.angle_offset",value))
+		//	set_angle_offset(atof(value.c_str()));
+		//else
+			set_angle_offset(90.0);
 
 		if(settings.get_value("star.invert",value) && value != "0")
 			set_invert(true);
@@ -510,7 +509,7 @@ StateStar_Context::save_settings()
 		settings.set_value("star.inner_width",strprintf("%f",(float)get_inner_width()));
 		settings.set_value("star.outer_width",strprintf("%f",(float)get_outer_width()));
 		settings.set_value("star.radius_ratio",strprintf("%f",(float)get_radius_ratio()));
-		settings.set_value("star.angle_offset",strprintf("%f",(float)get_angle_offset()));
+		//settings.set_value("star.angle_offset",strprintf("%f",(float)get_angle_offset()));
 		settings.set_value("star.invert",get_invert()?"1":"0");
 		settings.set_value("star.regular_polygon",get_regular_polygon()?"1":"0");
 		settings.set_value("star.layer_star",get_layer_star_flag()?"1":"0");
@@ -687,11 +686,8 @@ StateStar_Context::StateStar_Context(CanvasView* canvas_view):
 	number_of_points_label.set_alignment(Gtk::ALIGN_START, Gtk::ALIGN_CENTER);
 
 	// 7, angle offset
-	SPACING(angle_offset_indent, INDENTATION);
 	angle_offset_label.set_label(_("Offset:"));
 	angle_offset_label.set_alignment(Gtk::ALIGN_START, Gtk::ALIGN_CENTER);
-	angle_offset_box.pack_start(*angle_offset_indent, Gtk::PACK_SHRINK);
-	angle_offset_box.pack_start(angle_offset_label, Gtk::PACK_SHRINK);
 
 	// 8, radius ratio
 	radius_ratio_label.set_label(_("Radius Ratio:"));
@@ -801,7 +797,7 @@ StateStar_Context::StateStar_Context(CanvasView* canvas_view):
 		1, 2, 7, 8, Gtk::EXPAND|Gtk::FILL, Gtk::FILL, 0, 0
 		);
 	// 7, star points offset
-	options_table.attach(angle_offset_box,
+	options_table.attach(angle_offset_label,
 		0, 1, 8, 9, Gtk::EXPAND|Gtk::FILL, Gtk::FILL, 0, 0
 		);
 	options_table.attach(angle_offset_spin,

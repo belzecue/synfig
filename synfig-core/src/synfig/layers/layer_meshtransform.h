@@ -28,8 +28,11 @@
 /* === H E A D E R S ======================================================= */
 
 #include "layer_composite_fork.h"
-#include <synfig/mesh.h>
+
 #include <synfig/polygon.h>
+
+#include <synfig/rendering/primitive/mesh.h>
+#include <synfig/rendering/primitive/contour.h>
 
 /* === M A C R O S ========================================================= */
 
@@ -38,41 +41,25 @@
 /* === C L A S S E S & S T R U C T S ======================================= */
 
 namespace synfig {
-class Mesh_Trans;
 class Layer_MeshTransform : public Layer_CompositeFork
 {
 protected:
-	friend class Mesh_Trans;
-	Mesh mesh;
-	Polygon mask;
-
-	int max_texture_size;
-	Real max_texture_scale;
-
-private:
-	Vector texture_scale_dependency_from_x;
-	Vector texture_scale_dependency_from_y;
-	Rect world_bounds;
-	Rect texture_bounds;
-
-protected:
-	void update_mesh_and_mask();
+	rendering::Mesh::Handle mesh;
+	rendering::Contour::Handle mask;
 
 public:
 	//! Default constructor
-	Layer_MeshTransform();
+	explicit Layer_MeshTransform(Real amount=1.0, Color::BlendMethod blend_method=Color::BLEND_COMPOSITE);
 	//! Destructor
 	virtual ~Layer_MeshTransform();
 
 	synfig::Layer::Handle hit_check(synfig::Context context, const synfig::Point &point)const;
 	virtual Color get_color(Context context, const Point &pos)const;
-	virtual Rect get_full_bounding_rect(Context context)const;
+	virtual Rect get_bounding_rect()const;
 	virtual etl::handle<synfig::Transform> get_transform()const;
-	virtual bool accelerated_render(Context context,Surface *surface,int quality, const RendDesc &renddesc, ProgressCallback *cb)const;
 
 protected:
-	virtual RendDesc get_sub_renddesc_vfunc(const RendDesc &renddesc) const;
-	virtual rendering::Task::Handle build_rendering_task_vfunc(Context context) const;
+	virtual rendering::Task::Handle build_composite_fork_task_vfunc(ContextParams context_params, rendering::Task::Handle sub_task)const;
 }; // END of class Layer_MeshTransform
 
 }; // END of namespace synfig

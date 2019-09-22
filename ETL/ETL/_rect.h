@@ -39,7 +39,44 @@
 
 /* === C L A S S E S & S T R U C T S ======================================= */
 
-_ETL_BEGIN_NAMESPACE
+namespace etl {
+
+template<typename T>
+class range {
+public:
+	typedef T value_type;
+	value_type min, max;
+	
+	range(const value_type &min, const value_type &max):
+		min(min), max(max) { }
+	explicit range(const value_type &x = value_type()):
+		range(x, x) { }
+	
+	range& set(const value_type &min, const value_type &max)
+		{ this->min = min; this->max = max; return *this; }
+	range& set(const value_type &x)
+		{ return set(x, x); }
+	range& expand(const value_type &x) {
+		if (x < min) min = x;
+		if (max < x) max = x;
+		return *this;
+	}
+	
+	bool valid() const
+		{ return min < max; }
+	value_type size() const
+		{ return max - min; }
+
+	bool operator<(const range &other) const {
+		return min < other.min ? true
+			 : other.min < min ? false
+			 : max < other.max;
+	}
+	bool operator==(const range &other) const
+		{ return min == other.min && max == other.max; }
+	bool operator!=(const range &other) const
+		{ return !(*this == other); }
+};
 
 template<typename T>
 class rect
@@ -107,7 +144,7 @@ public:
 };
 
 
-//! We wan to do the edge compare test
+//! We want to do the edge compare test
 //!          |-----|
 //!    |------|        intersecting
 //!
@@ -270,7 +307,7 @@ void rects_merge(List &list)
 	rects_merge(list, std::less<T>());
 }
 
-_ETL_END_NAMESPACE
+};
 
 /* === E X T E R N S ======================================================= */
 

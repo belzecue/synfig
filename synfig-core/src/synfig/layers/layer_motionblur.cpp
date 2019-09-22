@@ -68,7 +68,7 @@ SYNFIG_LAYER_SET_CVS_ID(Layer_MotionBlur,"$Id$");
 
 Layer_MotionBlur::Layer_MotionBlur():
 	Layer_CompositeFork     (1.0,Color::BLEND_STRAIGHT),
-	param_aperture          (ValueBase(Time(0))),
+	param_aperture          (ValueBase(Time(1.0))),
 	param_subsamples_factor (ValueBase(Real(1.0))),
 	param_subsampling_type  (ValueBase(int(SUBSAMPLING_HYPERBOLIC))),
 	param_subsample_start   (ValueBase(Real(0.0))),
@@ -463,7 +463,7 @@ Layer_MotionBlur::build_rendering_task_vfunc(Context context) const
 
 		rendering::TaskBlend::Handle task_blend(new rendering::TaskBlend());
 		task_blend->amount = scales[i]*k;
-		task_blend->blend_method = Color::BLEND_ADD;
+		task_blend->blend_method = Color::BLEND_ADD_COMPOSITE;
 		task_blend->sub_task_a() = task;
 		task_blend->sub_task_b() = context.build_rendering_task();
 		task = task_blend;

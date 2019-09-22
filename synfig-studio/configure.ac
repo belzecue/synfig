@@ -2,8 +2,8 @@
 
 # -- I N I T --------------------------------------------------
 
-AC_PREREQ([2.59])
-AC_INIT([Synfig Studio],[1.3.10],[https://github.com/synfig/synfig/issues],[synfigstudio])
+AC_PREREQ([2.60])
+AC_INIT([Synfig Studio],[1.3.11],[https://github.com/synfig/synfig/issues],[synfigstudio])
 AC_REVISION()
 
 AM_CONDITIONAL(DEVELOPMENT_SNAPSHOT, true)
@@ -15,6 +15,11 @@ AC_CANONICAL_HOST
 AM_INIT_AUTOMAKE([subdir-objects])
 AM_MAINTAINER_MODE
 
+LT_INIT([dlopen, win32-dll, disable-static])
+AC_SUBST(LIBTOOL_DEPS)
+
+AC_CONFIG_MACRO_DIRS([m4])
+
 # -- V A R I A B L E S ----------------------------------------
 
 API_VERSION=1.0
@@ -23,6 +28,7 @@ imageext=png
 imagedir="${datadir}/pixmaps/synfigstudio"
 plugindir="${datadir}/synfig/plugins"
 sounddir="${datadir}/synfig/sounds"
+uidir="${datadir}/synfig/ui"
 
 GETTEXT_PACKAGE=synfigstudio
 LOCALEDIR=[${prefix}/${DATADIRNAME}/locale]
@@ -30,7 +36,6 @@ LOCALEDIR=[${prefix}/${DATADIRNAME}/locale]
 # -- P R O G R A M S ------------------------------------------
 
 AC_PROG_CC
-AC_GNU_SOURCE
 AC_PROG_CXX
 AC_PROG_CPP
 AC_PROG_CXXCPP
@@ -60,14 +65,6 @@ AC_ARG_ENABLE(g5opt,[
 
 AC_WIN32_QUIRKS
 
-AC_LIBTOOL_WIN32_DLL
-AC_LIBTOOL_DLOPEN
-AC_DISABLE_STATIC
-AC_ENABLE_SHARED
-AC_PROG_LIBTOOL
-AC_SUBST(LIBTOOL_DEPS)
-AC_LIBTOOL_PATCH
-
 ## AM_GLIB_GNU_GETTEXT([external])
 IT_PROG_INTLTOOL([0.35.0])
 AC_SUBST(GETTEXT_PACKAGE)
@@ -95,26 +92,6 @@ esac
 
 # -- L I B R A R I E S ----------------------------------------
 
-#AC_INIT
-#m4_include([m4/sdl.m4])
-m4_include([m4/sdl2.m4])
-AC_CONFIG_MACRO_DIR([m4])
-
-dnl Check for SDL
-#SDL_VERSION=1.2.0
-#AM_PATH_SDL($SDL_VERSION,:,AC_MSG_ERROR([*** SDL version $SDL_VERSION not found! ***]))
-#SDL_CFLAGS=$(sdl-config --cflags)
-#SDL_LIBS=$(sdl-config --libs)
-
-SDL_VERSION=2.0
-AM_PATH_SDL2($SDL_VERSION,:,AC_MSG_ERROR([*** SDL version $SDL_VERSION not found! ***]))
-
-SDL_CFLAGS=$(sdl2-config --cflags)
-SDL_LIBS=$(sdl2-config --libs)
-
-CFLAGS="$CFLAGS $SDL_CFLAGS"
-LIBS="$LIBS $SDL_LIBS -lSDL2_mixer"
-
 # Gtk compatibility hacks:
 # Since 3.14 some our hacks for GUI decorations works in other way
 # Since 3.14 for checkboxes STATE_FLAG_ACTIVE replaced with STATE_FLAG_CHECKED
@@ -127,8 +104,8 @@ PKG_CHECK_MODULES(GTKMM, gtkmm-3.0,,[
 AC_SUBST(GTKMM_CFLAGS)
 AC_SUBST(GTKMM_LIBS)
 
-PKG_CHECK_MODULES(SYNFIG, [synfig >= 1.3.10] [ETL >= 1.3.10] sigc++-2.0,,[
-    AC_MSG_ERROR([ ** Unable to set up dependent libraries (synfig >= 1.3.10, ETL >= 1.3.10, sigc++-2.0) ])
+PKG_CHECK_MODULES(SYNFIG, [synfig >= 1.3.11] [ETL >= 1.3.11] sigc++-2.0,,[
+    AC_MSG_ERROR([ ** Unable to set up dependent libraries (synfig >= 1.3.11, ETL >= 1.3.11, sigc++-2.0) ])
 ])
 AC_SUBST(SYNFIG_CFLAGS)
 AC_SUBST(SYNFIG_LIBS)
@@ -191,6 +168,7 @@ AC_SUBST(imageext)
 AC_SUBST(imagedir)
 AC_SUBST(plugindir)
 AC_SUBST(sounddir)
+AC_SUBST(uidir)
 
 AC_PATH_PROG(UPDATE_MIME_DATABASE, update-mime-database, no)
 AC_ARG_ENABLE(update-mimedb,
@@ -214,7 +192,7 @@ AC_CONFIG_FILES([
     po/Makefile.in
     synfigstudio.mime
     synfigstudio.keys
-    synfigstudio.xml
+    org.synfig.SynfigStudio.xml
     synfigstudio-thumbnailer.schemas
     brushes/Makefile
     brushes/CD_concept/Makefile
@@ -226,7 +204,18 @@ AC_CONFIG_FILES([
     plugins/Makefile
     plugins/add-skeleton-simple/Makefile
     plugins/view-unhide-all-layers/Makefile
+    plugins/lottie-exporter/Makefile
+    plugins/lottie-exporter/common/Makefile
+    plugins/lottie-exporter/effects/Makefile
+    plugins/lottie-exporter/helpers/Makefile
+    plugins/lottie-exporter/layers/Makefile
+    plugins/lottie-exporter/properties/Makefile
+    plugins/lottie-exporter/properties/shapePropKeyframe/Makefile
+    plugins/lottie-exporter/shapes/Makefile
+    plugins/lottie-exporter/sources/Makefile
+    plugins/lottie-exporter/synfig/Makefile
     sounds/Makefile
+    ui/Makefile
 ])
 AC_OUTPUT
 
@@ -249,8 +238,6 @@ Build images ---------------------> $with_images
 "'$'"CXX ------------------------------> '$CXX'
 "'$'"CXXFLAGS -------------------------> '$CXXFLAGS'
 "'$'"LDFLAGS --------------------------> '$LDFLAGS'
-"'$'"SDL_CFLAGS -----------------------> '$SDL_CFLAGS'
-"'$'"SDL_LIBS -------------------------> '$SDL_LIBS'
 "'$'"SYNFIG_CFLAGS --------------------> '$SYNFIG_CFLAGS'
 "'$'"SYNFIG_LIBS ----------------------> '$SYNFIG_LIBS'
 "'$'"GTKMM_CFLAGS ---------------------> '$GTKMM_CFLAGS'

@@ -101,7 +101,7 @@ Renderer_Canvas::Renderer_Canvas():
 	tiles_size(),
 	pixel_format()
 {
-	// check endianess
+	// check endianness
     union { int i; char c[4]; } checker = {0x01020304};
     bool big_endian = checker.c[0] == 1;
 
@@ -428,6 +428,7 @@ Renderer_Canvas::enqueue_render_frame(
 
 	rend_desc.clear_flags();
 	rend_desc.set_wh(w, h);
+	rend_desc.set_render_excluded_contexts(true);
 	ContextParams context_params(rend_desc.get_render_excluded_contexts());
 	TileList &frame_tiles = tiles[id];
 
@@ -651,8 +652,6 @@ Renderer_Canvas::clear_render()
 		tiles.clear();
 	}
 	rendering::Renderer::cancel(events);
-	assert(enqueued_tasks == 0);
-	enqueued_tasks = 0;
 	if (cleared && get_work_area())
 		get_work_area()->signal_rendering()();
 }

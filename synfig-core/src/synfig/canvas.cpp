@@ -113,8 +113,8 @@ Canvas::on_changed()
 Canvas::~Canvas()
 {
 	// we were having a crash where pastecanvas layers were still
-	// refering to a canvas after it had been destroyed;  this code
-	// will stop the pastecanvas layers from refering to the canvas
+	// referring to a canvas after it had been destroyed;  this code
+	// will stop the pastecanvas layers from referring to the canvas
 	// before the canvas is destroyed
 
 	// the set_sub_canvas(0) ends up deleting the parent-child link,
@@ -138,28 +138,78 @@ Canvas::~Canvas()
 	begin_delete();
 }
 
-Canvas::iterator
-Canvas::end()
+int
+Canvas::indexof(const const_iterator &iter) const
 {
-	return CanvasBase::end()-1;
+	int index = 0;
+	for(const_iterator i = begin(); i != end(); ++i, ++index)
+		if (i == iter)
+			return index;
+	return -1;
+}
+
+Canvas::iterator
+Canvas::byindex(int index)
+{
+	for(iterator i = begin(); i != end(); ++i, --index)
+		if (!index) return i;
+	return end();
 }
 
 Canvas::const_iterator
-Canvas::end()const
+Canvas::byindex(int index) const
 {
-	return CanvasBase::end()-1;
+	for(const_iterator i = begin(); i != end(); ++i, --index)
+		if (!index) return i;
+	return end();
+}
+
+Canvas::iterator
+Canvas::find_index(const etl::handle<Layer> &layer, int &index)
+{
+	index = -1;
+	int idx = 0;
+	for(iterator iter = begin(); iter != end(); ++iter, ++idx)
+		if (*iter == layer) { index = idx; return iter; }
+	return end();
+}
+
+Canvas::const_iterator
+Canvas::find_index(const etl::handle<Layer> &layer, int &index) const
+{
+	index = -1;
+	int idx = 0;
+	for(const_iterator iter = begin(); iter != end(); ++iter, ++idx)
+		if (*iter == layer) { index = idx; return iter; }
+	return end();
+}
+
+Canvas::iterator
+Canvas::end()
+{
+	Canvas::iterator i = CanvasBase::end();
+	return --i;
+}
+
+Canvas::const_iterator
+Canvas::end() const
+{
+	Canvas::const_iterator i = CanvasBase::end();
+	return --i;
 }
 
 Canvas::reverse_iterator
 Canvas::rbegin()
 {
-	return CanvasBase::rbegin()+1;
+	Canvas::reverse_iterator i = CanvasBase::rbegin();
+	return ++i;
 }
 
 Canvas::const_reverse_iterator
 Canvas::rbegin()const
 {
-	return CanvasBase::rbegin()+1;
+	Canvas::const_reverse_iterator i = CanvasBase::rbegin();
+	return ++i;
 }
 
 int
@@ -200,13 +250,15 @@ Canvas::empty()const
 Layer::Handle &
 Canvas::back()
 {
-	return *(end()-1);
+	iterator i = end();
+	return *--i;
 }
 
 const Layer::Handle &
 Canvas::back()const
 {
-	return *(end()-1);
+	const_iterator i = end();
+	return *--i;
 }
 
 IndependentContext
@@ -1013,7 +1065,7 @@ Canvas::add_child_canvas(Canvas::Handle child_canvas, const synfig::String& id)
 
 	if(!valid_id(id))
 		throw runtime_error("Invalid ID");
-
+	
 	try
 	{
 		String warnings;
@@ -1401,7 +1453,7 @@ synfig::optimize_layers(Time time, Context context, Canvas::Handle op_canvas, bo
 		if(composite && layer_visibility < 1.0)
 		{
 			// Let's clone the composite layer if it is not a Paste Canvas
-			// (because paste will be always new layer)
+			// (because paste will always be new layer)
 			// Oops... not always...
 			//if(dynamic_cast<Layer_PasteCanvas*>(layer.get()) != NULL)
 				composite = etl::handle<Layer_Composite>::cast_dynamic(composite->simple_clone());
@@ -1610,7 +1662,7 @@ Canvas::show_structure(int i) const
 // #define DEBUG_INVOKE_SVNCR
 
 // this is only ever called from valuenode_dynamiclist.cpp and valuenode_staticlist.cpp
-// the container is a ValueNode_{Static,Dyanmic}List
+// the container is a ValueNode_{Static,Dynamic}List
 // the content is the entry
 void
 Canvas::invoke_signal_value_node_child_removed(etl::handle<ValueNode> container, etl::handle<ValueNode> content)
@@ -1701,5 +1753,6 @@ void
 Canvas::fill_sound_processor(SoundProcessor &soundProcessor) const
 {
 	for(IndependentContext c = begin(); *c; ++c)
-		(*c)->fill_sound_processor(soundProcessor);
+		if ((*c)->active())
+			(*c)->fill_sound_processor(soundProcessor);
 }

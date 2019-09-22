@@ -79,6 +79,7 @@ class GammaPattern : public Gtk::DrawingArea
 	float gamma_r;
 	float gamma_g;
 	float gamma_b;
+	float gamma_a;
 
 	int tile_w, tile_h;
 
@@ -87,6 +88,7 @@ class GammaPattern : public Gtk::DrawingArea
 	float r_F32_to_F32(float x) const { return std::max(0.f, std::min(1.f, synfig::Gamma::calculate(x, gamma_r))); }
 	float g_F32_to_F32(float x) const { return std::max(0.f, std::min(1.f, synfig::Gamma::calculate(x, gamma_g))); }
 	float b_F32_to_F32(float x) const { return std::max(0.f, std::min(1.f, synfig::Gamma::calculate(x, gamma_b))); }
+	float a_F32_to_F32(float x) const { return std::max(0.f, std::min(1.f, synfig::Gamma::calculate(x, gamma_a))); }
 
 public:
 	GammaPattern();
@@ -97,10 +99,12 @@ public:
 	void set_gamma_r(float x) { gamma_r=x; }
 	void set_gamma_g(float x) { gamma_g=x; };
 	void set_gamma_b(float x) { gamma_b=x; };
+	void set_gamma_a(float x) { gamma_a=x; };
 
 	float get_gamma_r()const { return gamma_r; }
 	float get_gamma_g()const { return gamma_g; }
 	float get_gamma_b()const { return gamma_b; }
+	float get_gamma_a()const { return gamma_a; }
 
 	virtual bool on_draw(const Cairo::RefPtr<Cairo::Context> &cr);
 }; // END of class GammaPattern
@@ -136,6 +140,7 @@ class Dialog_Setup : public Dialog_Template
 	void on_gamma_r_change();
 	void on_gamma_g_change();
 	void on_gamma_b_change();
+	void on_gamma_a_change();
 	void on_size_template_combo_change();
 	void on_fps_template_combo_change();
 	void on_ui_language_combo_change();
@@ -149,6 +154,8 @@ class Dialog_Setup : public Dialog_Template
 	void on_preview_background_color_changed();
 	void on_brush_path_add_clicked();
 	void on_brush_path_remove_clicked();
+	void on_choose_editor_pressed();
+	bool select_path_dialog(const std::string &title, std::string &filename);
 
 	void create_gamma_page(PageInfo pi);
 	void create_system_page(PageInfo pi);
@@ -167,6 +174,7 @@ class Dialog_Setup : public Dialog_Template
 	Glib::RefPtr<Gtk::Adjustment> adj_gamma_r;
 	Glib::RefPtr<Gtk::Adjustment> adj_gamma_g;
 	Glib::RefPtr<Gtk::Adjustment> adj_gamma_b;
+	Glib::RefPtr<Gtk::Adjustment> adj_gamma_a;
 
 	Glib::RefPtr<Gtk::Adjustment> adj_recent_files;
 	Glib::RefPtr<Gtk::Adjustment> adj_undo_depth;
@@ -178,14 +186,13 @@ class Dialog_Setup : public Dialog_Template
 
 	synfig::Time::Format time_format;
 
-	Gtk::Menu *timestamp_menu;
 	Widget_Enum *widget_enum;
 
 	Widget_Time auto_backup_interval;
 
 	Gtk::Switch toggle_restrict_radius_ducks;
 	Gtk::Switch toggle_resize_imported_images;
-	Gtk::CheckButton toggle_enable_experimental_features;
+	Gtk::Switch toggle_enable_experimental_features;
 	Gtk::Switch toggle_use_dark_theme;
 	Gtk::Switch toggle_show_file_toolbar;
 
@@ -218,7 +225,6 @@ class Dialog_Setup : public Dialog_Template
 	//Gtk::FileFilter         filter_any;
 
 	Gtk::Entry        image_sequence_separator;
-	Gtk::ComboBoxText navigator_renderer_combo;
 	Gtk::ComboBoxText workarea_renderer_combo;
 	Gtk::Switch       toggle_play_sound_on_render_done;
 
@@ -226,7 +232,7 @@ class Dialog_Setup : public Dialog_Template
 	Gtk::Switch toggle_handle_tooltip_radius;
 	Gtk::Switch toggle_handle_tooltip_transformation;
 	Gtk::Switch toggle_autobackup;
-
+	Gtk::Entry image_editor_path_entry;
 	long pref_modification_flag;
 	//! Do not update state flag on refreshing
 	bool refreshing;

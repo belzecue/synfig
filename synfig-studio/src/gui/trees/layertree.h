@@ -138,6 +138,7 @@ private:
 	sigc::signal<void,synfigapp::ValueDesc,synfig::ValueBase> signal_edited_value_;
 
 	sigc::signal<bool, int, Gtk::TreeRow, ColumnID> signal_layer_user_click_;
+	sigc::signal<bool, GdkEventButton*> signal_no_layer_user_click_;
 
 	sigc::signal<bool, int, Gtk::TreeRow, ColumnID> signal_param_user_click_;
 
@@ -165,12 +166,12 @@ private:
 
 private:
 
-	Gtk::Widget* create_layer_tree();
-	Gtk::Widget* create_param_tree();
+	void create_layer_tree();
+	void create_param_tree();
 	//! Update the param_tree_view header height.
 	/*! \return true if param_tree_header_height updated, else false
 	*/
-	bool update_param_tree_header_height();
+	void update_param_tree_header_height();
 
 	/*
  -- ** -- S I G N A L   T E R M I N A L S -------------------------------------
@@ -254,6 +255,8 @@ public:
 	sigc::signal<void,synfigapp::ValueDesc,synfig::ValueBase>& signal_edited_value() { return signal_edited_value_; }
 
 	sigc::signal<bool,int, Gtk::TreeRow, ColumnID>& signal_layer_user_click() { return signal_layer_user_click_; }
+
+	sigc::signal<bool, GdkEventButton*>& signal_no_layer_user_click() { return signal_no_layer_user_click_; }
 
 	sigc::signal<bool,int, Gtk::TreeRow, ColumnID>& signal_param_user_click() { return signal_param_user_click_; }
 

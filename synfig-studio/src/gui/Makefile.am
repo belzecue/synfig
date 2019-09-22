@@ -59,6 +59,7 @@ OTHER_HH = \
 	preview.h \
 	renddesc.h \
 	render.h \
+	resourcehelper.h \
 	splash.h \
 	statemanager.h \
 	valuelink.h \
@@ -85,6 +86,7 @@ OTHER_CC = \
 	preview.cpp \
 	renddesc.cpp \
 	render.cpp \
+	resourcehelper.cpp \
 	splash.cpp \
 	statemanager.cpp \
 	valuelink.cpp \
@@ -112,8 +114,7 @@ synfigstudio_LDADD = \
 	../synfigapp/libsynfigapp.la \
 	@SYNFIG_LIBS@ \
 	@GTKMM_LIBS@ \
-	@JACK_LIBS@ \
-	@SDL_LIBS@
+	@JACK_LIBS@
 
 synfigstudio_LDFLAGS = \
 	-dlopen self
@@ -122,9 +123,9 @@ synfigstudio_CXXFLAGS = \
 	@SYNFIG_CFLAGS@ \
 	@GTKMM_CFLAGS@ \
 	@JACK_CFLAGS@ \
-	@SDL_CFLAGS@ \
 	-DIMAGE_DIR=\"$(imagedir)\" \
 	-DIMAGE_EXT=\"$(imageext)\" \
 	-DPLUGIN_DIR=\"$(plugindir)\" \
 	-DSOUND_DIR=\"$(sounddir)\" \
+	-DUI_DIR=\"$(uidir)\" \
 	-DLOCALEDIR=\"${LOCALEDIR}\"

@@ -129,12 +129,6 @@ SynfigCommandLineParser::SynfigCommandLineParser() :
 	video_codec(),
 	video_bitrate(),
 
-	// Debug group
-#ifdef _DEBUG
-	debug_guid(),
-	debug_signal(),
-#endif
-
 	// Synfig info group
 	show_help(),
 	show_importers(),
@@ -146,6 +140,11 @@ SynfigCommandLineParser::SynfigCommandLineParser() :
 	show_targets(),
 	show_codecs(),
 	show_value_nodes(),
+	// Debug group
+#ifdef _DEBUG
+	debug_guid(),
+	debug_signal(),
+#endif
 	show_version()
 {
 	Glib::init();
@@ -365,8 +364,7 @@ void SynfigCommandLineParser::process_settings_options()
 				   << SynfigToolGeneralOptions::instance()->get_threads() << std::endl;
 }
 
-//void OptionsProcessor::process_info_options()
-void SynfigCommandLineParser::process_info_options()
+void SynfigCommandLineParser::process_trivial_info_options()
 {
 	if (show_help)
 	{
@@ -425,6 +423,11 @@ void SynfigCommandLineParser::process_info_options()
 		throw (SynfigToolException(SYNFIGTOOL_HELP));
 	}
 
+}
+
+//void OptionsProcessor::process_info_options()
+void SynfigCommandLineParser::process_info_options()
+{
 	if (show_layers_list)
 	{
 		synfig::Layer::Book::iterator iter =
@@ -631,7 +634,8 @@ TargetParam SynfigCommandLineParser::extract_targetparam()
 	TargetParam params;
 
 	// Both parameters are co-dependent
-	if (!(video_codec.empty() && video_bitrate == 0))
+	if ( ( video_codec.empty() && video_bitrate != 0)
+	  || (!video_codec.empty() && video_bitrate == 0) )
 		throw (SynfigToolException(SYNFIGTOOL_MISSINGARGUMENT,
 									_("Both video codec and bitrate parameters are necessary.")));
 
@@ -855,7 +859,7 @@ void SynfigCommandLineParser::print_target_video_codecs_help() const
 
 #ifdef _DEBUG
 
-// DEBUG auxiliar functions
+// DEBUG auxiliary functions
 void guid_test()
 {
 	std::cout << "GUID Test" << std::endl;

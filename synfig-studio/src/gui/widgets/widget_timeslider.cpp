@@ -174,7 +174,10 @@ Widget_Timeslider::Widget_Timeslider():
 }
 
 Widget_Timeslider::~Widget_Timeslider()
-	{ set_time_model( etl::handle<TimeModel>() ); }
+{
+	time_change.disconnect();
+	time_bounds_change.disconnect();
+}
 
 void
 Widget_Timeslider::set_time_model(const etl::handle<TimeModel> &x)
@@ -275,7 +278,7 @@ Widget_Timeslider::on_draw(const Cairo::RefPtr<Cairo::Context> &cr)
 					time_model->get_frame_rate(),
 					App::get_time_format() ));
 
-			// Aproximately a font size of 8 pixels.
+			// Approximately a font size of 8 pixels.
 			// Pango::SCALE = 1024
 			// create_attr_size waits a number in 1000th of pixels.
 			// Should be user customizable in the future. Now it is fixed to 10

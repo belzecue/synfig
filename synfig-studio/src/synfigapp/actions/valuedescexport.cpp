@@ -121,7 +121,7 @@ Action::ValueDescExport::is_candidate(const ParamList &x)
 		{
 			return false;
 		}
-	// Don't allow to export lower and upper boundaries of the WidhtPoint
+	// Don't allow to export lower and upper boundaries of the WidthPoint
 		if(value_desc.parent_is_linkable_value_node()
 			&& value_desc.get_parent_value_node()->get_name()=="composite"
 			&& value_desc.get_parent_value_node()->get_type()==type_width_point
@@ -274,6 +274,8 @@ Action::ValueDescExport::prepare()
 			// scan all layers and canvases and relink value nodes
 			scan_canvas(prev_canvas, canvas, get_canvas());
 			scan_canvas(prev_canvas, canvas, canvas);
+		} else {
+			canvas->rend_desc()=get_canvas()->rend_desc();
 		}
 
 		Action::Handle action(CanvasAdd::create());

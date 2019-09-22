@@ -79,6 +79,8 @@ public:
 	virtual bool run(RunParams&) const {
 		if (!is_valid())
 			return true;
+		if (!contour)
+			return false;
 
 		Vector ppu = get_pixels_per_unit();
 
@@ -93,6 +95,7 @@ public:
 		Polyspan polyspan;
 		polyspan.init(target_rect);
 		software::Contour::build_polyspan(contour->get_chunks(), matrix, polyspan, detail);
+		polyspan.close();
 		polyspan.sort_marks();
 
 		LockWrite la(this);

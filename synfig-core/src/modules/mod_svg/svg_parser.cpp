@@ -46,7 +46,7 @@ using namespace synfig;
 
 //PARSER PREFERENCES
 
-//Seperate transformations: apply transformations on a per-layer basis, rather than on canvases
+//Separate transformations: apply transformations on a per-layer basis, rather than on canvases
 #define SVG_SEP_TRANSFORMS 1
 
 //Resolve BLine transformations: resolve transformations instead of creating transformation layers
@@ -252,6 +252,7 @@ Svg_parser::parser_graphics(const xmlpp::Node* node,xmlpp::Element* root,String 
 		}
 		if(nodename.compare("g")==0){
 			parser_layer (node,root->add_child("layer"),parent_style,mtx);
+			free(mtx);
 			return;
 		}
 
@@ -302,6 +303,7 @@ Svg_parser::parser_graphics(const xmlpp::Node* node,xmlpp::Element* root,String 
 				build_fill (child_fill,fill,NULL);
 			}
 			parser_effects(nodeElement,child_layer,parent_style,mtx);
+			free(mtx);
 			return;
 		}
 		if ((!(SVG_RESOLVE_BLINE) && mtx) || typeFill==2 || typeStroke==2)
@@ -416,6 +418,7 @@ Svg_parser::parser_graphics(const xmlpp::Node* node,xmlpp::Element* root,String 
 			parser_effects(nodeElement,child_layer,parent_style,NULL);
 		else
 			parser_effects(nodeElement,child_layer,parent_style,mtx);
+		free(mtx);
 	}
 }
 
@@ -1203,7 +1206,7 @@ Svg_parser::parser_radialGradient(const xmlpp::Node* node){
 
 		std::list<ColorStop*> *stops=NULL;
 		if(!link.empty()){
-			//inkscape always use link, i dont need parser stops here, but it's posible
+			//inkscape always use link, i don't need parser stops here, but it's possible
 			stops=find_colorStop (link);
 		}
 		if(stops)
@@ -1247,6 +1250,12 @@ Svg_parser::adjustGamma(float r,float g,float b,float a){
 			ret.set_b(-gamma.b_F32_to_F32(-ret.get_b()));
 		else
 			ret.set_b(gamma.b_F32_to_F32(ret.get_b()));
+	}
+	if(gamma.get_gamma_a()!=1.0){
+		if(ret.get_a() < 0)
+			ret.set_a(-gamma.a_F32_to_F32(-ret.get_a()));
+		else
+			ret.set_a(gamma.a_F32_to_F32(ret.get_a()));
 	}
 	return ret;
 }
@@ -1633,6 +1642,8 @@ Svg_parser::parser_transform(const String transform){
 			else
 				multiplySVGMatrix(&a,newSVGMatrix((*aux).substr(start,end-start)));
 		}else{
+			if (!matrixIsNull(a))
+				free(a);
 			a=newSVGMatrix(1,0,0,1,0,0);
 		}
 		aux++;
@@ -1707,6 +1718,7 @@ Svg_parser::multiplySVGMatrix(SVGMatrix **mtx1,SVGMatrix *mtx2){
 	(*mtx1)->d=aux->d;
 	(*mtx1)->e=aux->e;
 	(*mtx1)->f=aux->f;
+	free(aux);
 }
 bool
 Svg_parser::matrixIsNull(SVGMatrix *mtx){

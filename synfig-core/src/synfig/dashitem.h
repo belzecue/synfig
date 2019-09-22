@@ -30,6 +30,7 @@
 
 #include "uniqueid.h"
 #include "real.h"
+#include "widthpoint.h"
 
 /* === M A C R O S ========================================================= */
 
@@ -48,10 +49,12 @@ private:
 public:
 	enum SideType
 	{
-		TYPE_ROUNDED         =1,
-		TYPE_SQUARED         =2,
-		TYPE_PEAK            =3,
-		TYPE_FLAT            =4
+		TYPE_ROUNDED       = WidthPoint::TYPE_ROUNDED,
+		TYPE_SQUARED       = WidthPoint::TYPE_SQUARED,
+		TYPE_PEAK          = WidthPoint::TYPE_PEAK,
+		TYPE_FLAT          = WidthPoint::TYPE_FLAT,
+		TYPE_INNER_ROUNDED = WidthPoint::TYPE_INNER_ROUNDED,
+		TYPE_INNER_PEAK    = WidthPoint::TYPE_INNER_PEAK,
 	};
 	DashItem();
 	DashItem(Real position, Real length, int sidebefore=TYPE_FLAT,
@@ -67,6 +70,9 @@ public:
 	void set_side_type_after(int sideafter);
 	int get_side_type(int i)const;
 	bool operator == (const DashItem& rhs);
+	
+	static WidthPoint::SideType to_wp_side_type(SideType st)
+		{ return (WidthPoint::SideType)(int)st; }
 }; // END of class DashItem
 
 }; // END of namespace synfig

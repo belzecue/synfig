@@ -23,14 +23,14 @@
 #
 # = Examples: =
 #
-# == Standart mode ==
+# == Standard mode ==
 # Configure and (re)build:
 #    ./build.sh
 # Configure and make clean build:
 #    ./build.sh all full
 # Quick rebuild (without configure):
 #    ./build.sh all make
-# Quick rebuild od synfig-core (without configure):
+# Quick rebuild of synfig-core (without configure):
 #    ./build.sh core make
 
 set -e
@@ -67,11 +67,76 @@ fi
 [ -d synfig-core ] || mkdir synfig-core
 [ -d synfig-studio ] || mkdir synfig-studio
 [ -d "${PREFIX}" ] || mkdir "${PREFIX}"
+[ -d "${PREFIX}/bin" ] || mkdir "${PREFIX}/bin"
 
-export PKG_CONFIG_PATH=${PREFIX}/lib/pkgconfig:${PREFIX}/lib64/pkgconfig:/usr/local/lib/pkgconfig:/usr/lib/`uname -i`-linux-gnu/pkgconfig/:$PKG_CONFIG_PATH
+#========================== VARIABLES ==================================
+
+if [[ `uname` == "Linux" ]]; then
+	export PKG_CONFIG_PATH=${PREFIX}/lib64/pkgconfig:/usr/local/lib/pkgconfig:/usr/lib/`uname -i`-linux-gnu/pkgconfig/:${PKG_CONFIG_PATH}
+fi
+if [[ `uname -o` == "Msys" ]]; then
+	PATH="${PREFIX}/lib/ccache/bin:${PATH}"
+	# copy MLT
+	MLT_REV=1   # Change this when something is changed inside of if block below
+	if [ ! -f ${PREFIX}/mlt-${VERSION_MLT}-${MLT_REV}.done ]; then
+		VERSION_MLT="6.16.0"
+		cp -rf /opt/mlt-${VERSION_MLT}/*.dll ${PREFIX}/bin/
+		cp -rf /opt/mlt-${VERSION_MLT}/*.exe ${PREFIX}/bin/
+		cp -rf /opt/mlt-${VERSION_MLT}/share ${PREFIX}/bin/
+		mkdir -p ${PREFIX}/bin/lib/
+		cp -rf /opt/mlt-${VERSION_MLT}/lib/mlt ${PREFIX}/bin/lib/
+		touch ${PREFIX}/mlt-${VERSION_MLT}-${MLT_REV}.done
+	fi
+	export PKG_CONFIG_PATH="/opt/mlt-${VERSION_MLT}/lib/pkgconfig:${PKG_CONFIG_PATH}"
+fi
+if [[ `uname` == "Darwin" ]]; then
+	# autopoint is not in PATH after install via brew (conflicting with system gettext https://github.com/Homebrew/legacy-homebrew/issues/24070)
+	# so we can do `brew link --force gettext` or just add it to PATH before configuring which is preferable because we need it only for compiling
+	export PATH="/usr/local/opt/ccache/libexec:/usr/local/opt/gettext/bin:${PATH}"
+	export LDFLAGS="-L/usr/local/opt/gettext/lib ${LDFLAGS}"
+	export LDFLAGS="-L$(brew --prefix libomp)/lib ${LDFLAGS}"
+	export LDFLAGS="-L$(brew --prefix libtool)/lib ${LDFLAGS}"
+	export CPPFLAGS="-I/usr/local/opt/gettext/include ${CPPFLAGS}"
+	export PKG_CONFIG_PATH="/usr/local/opt/libffi/lib/pkgconfig:${PKG_CONFIG_PATH}"
+
+	# Force use system perl, see https://github.com/synfig/synfig/issues/794
+	cat > ${PREFIX}/bin/perl <<EOF
+#!/bin/sh
+
+/usr/bin/perl "\$@"
+EOF
+	chmod +x ${PREFIX}/bin/perl
+
+fi
+export PKG_CONFIG_PATH=${PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH}
 export PATH=${PREFIX}/bin:$PATH
 export LD_LIBRARY_PATH=${PREFIX}/lib:${PREFIX}/lib64:/usr/local/lib:$LD_LIBRARY_PATH
-export LDFLAGS="-Wl,-rpath -Wl,\\\$\$ORIGIN/lib"
+export LDFLAGS="-Wl,-rpath -Wl,\\\$\$ORIGIN/lib ${LDFLAGS}"
+export CFLAGS="-fdiagnostics-color=always $CFLAGS"
+export CXXFLAGS="-fdiagnostics-color=always $CXXFLAGS"
+
+#========================== FUNCTIONS ==================================
+
+travis_fold_start()
+{
+	if [ -n "$TRAVIS" ]; then
+		echo -e "travis_fold:start:$1\033[33;1m$2\033[0m"
+	fi
+}
+
+travis_fold_end()
+{
+	if [ -n "$TRAVIS" ]; then
+		echo -e "\ntravis_fold:end:$1\r"
+	fi
+}
+
+ccache_show_stats()
+{
+	if ( which ccache > /dev/null ); then
+	ccache -s
+	fi
+}
 
 #============================== ETL ====================================
 
@@ -97,9 +162,12 @@ etl_make()
 {
 cd ETL
 make -j$MAKE_THREADS
-sed -i "s|^Cflags: -I\\\${includedir}|Cflags: -I$REPO_DIR\/ETL -I\\\${includedir}|" ETL.pc
+sed -i.bak "s|^Cflags: -I\\\${includedir}|Cflags: -I$REPO_DIR\/ETL -I\\\${includedir}|" ETL.pc
 make install
 cd ..
+
+ccache_show_stats
+
 }
 
 etl_build()
@@ -142,7 +210,7 @@ fi
 	--includedir=${PREFIX}/include \
 	--disable-static --enable-shared \
 	--with-magickpp \
-	--with-libavcodec \
+	--without-libavcodec \
 	--without-included-ltdl \
 	$BOOST_CONFIGURE_OPTIONS \
 	$DEBUG
@@ -153,9 +221,12 @@ core_make()
 {
 cd synfig-core
 make -j$MAKE_THREADS
-sed -i "s|^includedir=.*$|includedir=$REPO_DIR\/synfig-core\/src|" synfig.pc
+sed -i.bak "s|^includedir=.*$|includedir=$REPO_DIR\/synfig-core\/src|" synfig.pc
 make install
 cd ..
+
+ccache_show_stats
+
 }
 
 core_build()
@@ -187,11 +258,21 @@ cd synfig-studio
 pushd ${REPO_DIR}/synfig-studio/ >/dev/null
 /bin/bash ${REPO_DIR}/synfig-studio/bootstrap.sh
 popd >/dev/null
+if [[ `uname` == "Linux" ]]; then
+	export CONFIGURE_OPTIONS="--enable-jack"
+elif [[ `uname -o` == "Msys" ]]; then
+	# currently where is a bug in synfig-core (in MinGW build) which causes 
+	# synfig-core to halt before exit, so we skip image generation
+	export CONFIGURE_OPTIONS="--without-images"
+else
+	export CONFIGURE_OPTIONS=""
+fi
+
 /bin/bash ${REPO_DIR}/synfig-studio/configure --prefix=${PREFIX} \
 	--includedir=${PREFIX}/include \
 	--disable-static \
 	--enable-shared \
-	--enable-jack \
+	${CONFIGURE_OPTIONS} \
 	--enable-warnings=max $DEBUG
 cd ..
 }
@@ -199,8 +280,12 @@ cd ..
 studio_make()
 {
 cd synfig-studio
+
 make -j$MAKE_THREADS
 make install
+
+ccache_show_stats
+
 for n in AUTHORS COPYING NEWS README
 do
   	cp -f ${REPO_DIR}/synfig-studio/$n ${PREFIX}
@@ -257,9 +342,17 @@ studio_make
 
 all_build()
 {
+travis_fold_start ETL "Building ETL"
 etl_build
+travis_fold_end ETL
+
+travis_fold_start synfig-core "Building Synfig Core"
 core_build
+travis_fold_end synfig-core
+
+travis_fold_start synfig-studio "Building Synfig Studio"
 studio_build
+travis_fold_end synfig-studio
 }
 
 all_full()

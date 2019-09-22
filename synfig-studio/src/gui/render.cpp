@@ -30,29 +30,30 @@
 #	include <config.h>
 #endif
 
-#include <synfig/general.h>
+#include <cerrno>
+#include <map>
+#include <glibmm.h>
 
-#include "render.h"
-#include "app.h"
 #include <gtkmm/frame.h>
 #include <gtkmm/alignment.h>
-#include <glibmm.h>
+
+#include <ETL/stringf>
+
+#include <synfig/general.h>
 #include <synfig/target_scanline.h>
 #include <synfig/canvas.h>
+#include <synfig/soundprocessor.h>
+
+#include "app.h"
 #include "asyncrenderer.h"
+#include "docks/dockmanager.h"
+#include "docks/dock_info.h"
 #include "dialogs/dialog_ffmpegparam.h"
 #include "dialogs/dialog_spritesheetparam.h"
 
+#include "render.h"
+
 #include <gui/localization.h>
-
-#include <ETL/stringf>
-#include <errno.h>
-
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_mixer.h>
-
-#include "docks/dockmanager.h"
-#include "docks/dock_info.h"
 
 #endif
 
@@ -222,12 +223,13 @@ RenderSettings::set_entry_filename()
 		else
 			filename+=" ("+canvas->get_name()+')';
 	}
-
-	filename += ".avi";
-
+	
 	try
 	{
-		entry_filename.set_text((filename));
+		if(!comboboxtext_target.get_active_row_number())
+			entry_filename.set_text((filename +".avi"));
+		// in case the file was saved and loaded again then .ext should be according to target
+		else on_comboboxtext_target_changed();
 	}
 	catch(...)
 	{
@@ -239,9 +241,21 @@ RenderSettings::set_entry_filename()
 void
 RenderSettings::on_comboboxtext_target_changed()
 {
+	std::map<std::string,std::string> ext = {{"bmp",".bmp"}, {"cairo_png",".png"},{"dv",".dv"},
+					{"ffmpeg",".avi"},{"gif",".gif"},{"imagemagick",".png"}, {"jpeg",".jpg"},
+					{"magick++",".gif"},{"mng",".mng"},{"openexr",".exr"},{"png",".png"},
+					{"png-spritesheet",".png"},{"ppm",".ppm"}, {"yuv420p",".yuv"}, {"libav",".avi"}};
 	int i = comboboxtext_target.get_active_row_number();
 	if (i < 0 || i >= (int)target_names.size()) return;
 	if (target_name == target_names[i]) return;
+	auto itr = ext.find(target_names[i]); 
+    // check if target_name is there in map
+    if(itr != ext.end())
+	{
+		String filename = entry_filename.get_text();
+		String newfilename = filename.substr(0,filename.find_last_of('.'))+itr->second;
+		entry_filename.set_text(newfilename);
+	}
 	set_target(target_names[i]);
 }
 
@@ -256,7 +270,7 @@ RenderSettings::set_target(synfig::String name)
 {
 	target_name=name;
 	//TODO: Replace this condition
-	tparam_button->set_sensitive(target_name.compare("ffmpeg") && target_name.compare("png-spritesheet")?false:true);
+	tparam_button->set_sensitive(!(target_name.compare("ffmpeg") && target_name.compare("png-spritesheet")));
 }
 
 void
@@ -272,9 +286,9 @@ RenderSettings::on_targetparam_pressed()
 {
 	Dialog_TargetParam * dialogtp;
 	//TODO: Replace this conditions too
-	if (target_name.compare("ffmpeg") == 0)
+	if (!target_name.compare("ffmpeg"))
 		dialogtp = new Dialog_FFmpegParam (*this);
-	else if (target_name.compare("png-spritesheet") == 0)
+	else if (!target_name.compare("png-spritesheet"))
 		dialogtp = new Dialog_SpriteSheetParam (*this);
 	else
 		return;
@@ -446,9 +460,11 @@ RenderSettings::on_finished()
 	
 	submit_next_render_pass();
 
-	if (really_finished) { //Because of multi-pass render
-		//Sound effect - RenderDone (-1 : play on first free channel, 0 : no repeat)
-		if (App::use_render_done_sound) Mix_PlayChannel( -1, App::gRenderDone, 0 );
+	if (really_finished) { // Because of multi-pass render
+		if (App::use_render_done_sound && App::sound_render_done) {
+			App::sound_render_done->set_position(Time());
+			App::sound_render_done->set_playing(true);
+		}
 		App::dock_info_->set_render_progress(1.0);
 	}
 }

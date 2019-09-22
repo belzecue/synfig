@@ -138,7 +138,7 @@ png_trgt_spritesheet::set_rend_desc(RendDesc *given_desc)
 	//Reset on uninitialized values
 	if ((params.columns == 0) || (params.rows == 0))
 	{
-		cout << "Uninitialized sheet parameteras. Reset parameters." << endl;
+		cout << "Uninitialized sheet parameters. Reset parameters." << endl;
 		params.columns = numimages;
 		params.rows = 1;
 		params.append = true;
@@ -178,7 +178,7 @@ png_trgt_spritesheet::set_rend_desc(RendDesc *given_desc)
 
 	if (sheet_width * sheet_height > 5000 * 2000)
 	{
-		synfig::error(strprintf(_("The image is too large. It's size must be not more than 5000*2000=10000000 px. Now is %d*%d=%d px."), 
+		synfig::error(strprintf(_("The image is too large. It's size must be not more than 5000*2000=10000000 px. Currently it's %d*%d=%d px."), 
 		                          sheet_width, sheet_height, sheet_width * sheet_height));
 		return false;
 	}
@@ -357,7 +357,7 @@ png_trgt_spritesheet::read_png_file()
 	//Also see gamma.h and gamma.cpp
 	Gamma gamma_png(2.2);
 	
-	//From png bytes to synfig::Color convertion
+	//From png bytes to synfig::Color conversion
     for (unsigned int y = 0; y < in_image.height; y++) 
 	{
         png_byte* row = row_pointers[y];
@@ -367,7 +367,7 @@ png_trgt_spritesheet::read_png_file()
 			color_data[y][x].set_r(gamma_png.r_U8_to_F32(ptr[0]));
 			color_data[y][x].set_g(gamma_png.g_U8_to_F32(ptr[1]));
 			color_data[y][x].set_b(gamma_png.b_U8_to_F32(ptr[2]));
-			color_data[y][x].set_a((float)ptr[3] / 255.0f);
+			color_data[y][x].set_a(gamma_png.a_U8_to_F32(ptr[3]));
         }
     }
 

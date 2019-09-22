@@ -278,7 +278,7 @@ public:
 
 	//! Returns a normalized version of the vector
 	Vector norm()const
-		{ return (*this)*inv_mag(); }
+		{ return is_equal_to(Vector()) ? Vector() : (*this)*inv_mag(); }
 
 	//! Returns a perpendicular version of the vector
 	Vector perp()const
@@ -288,7 +288,7 @@ public:
 		{ return Angle::rad(atan2(_y, _x)); }
 
 	bool is_equal_to(const Vector& rhs)const
-		{ return approximate_equal((*this-rhs).mag_squared(), value_type(0.0)); }
+		{ return approximate_equal(_x, rhs._x) && approximate_equal(_y, rhs._y); }
 
 	static Vector zero() { return Vector(0,0); }
 	static Vector nan() { return Vector(real_nan<value_type>(), real_nan<value_type>()); }
@@ -475,7 +475,7 @@ abs(const synfig::Vector &rhs)
 
 #include <ETL/bezier>
 
-_ETL_BEGIN_NAMESPACE
+namespace etl {
 
 template <>
 class bezier_base<synfig::Vector,float> : public std::unary_function<float,synfig::Vector>
@@ -554,7 +554,7 @@ public:
 	}
 };
 
-_ETL_END_NAMESPACE
+};
 
 
 /* === E N D =============================================================== */

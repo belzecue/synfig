@@ -56,8 +56,7 @@
 
 #include <synfig/savecanvas.h>
 #include <synfig/canvasfilenaming.h>
-#include <synfig/layers/layer_pastecanvas.h>
-#include <synfig/layers/layer_bitmap.h>
+#include <synfig/layers/layer_switch.h>
 #include <synfig/valuenode_registry.h>
 #include <synfig/valuenodes/valuenode_composite.h>
 #include <synfig/valuenodes/valuenode_duplicate.h>
@@ -115,6 +114,38 @@ Instance::Instance(synfig::Canvas::Handle canvas, synfig::FileSystem::Handle con
 Instance::~Instance()
 {
 }
+
+// this function returns true if the given extension belongs to image layer type
+bool Instance::is_img(synfig::String ext) const
+{
+		std::set <String> img_ext{".jpg",".jpeg",".png",".bmp",".gif"};
+		bool is_in = img_ext.find(ext) != img_ext.end();
+		return is_in;
+}
+
+synfig::Layer::Handle
+Instance::layer_inside_switch(synfig::Layer_PasteCanvas::Handle &paste) const
+{
+	synfig::Layer::Handle child_layer;
+	synfig::Canvas::Handle canvas = paste->get_sub_canvas();
+	synfig::String active_layer = "";
+	if(etl::handle<Layer_Switch> l_switch = etl::handle<Layer_Switch>::cast_dynamic(paste))
+	{
+		active_layer = l_switch->get_param("layer_name").get(synfig::String());
+	}
+	if(canvas)
+	{
+		for(IndependentContext i = canvas->get_independent_context(); *i; i++)
+		{
+			if((*i)->get_description()==active_layer)
+			{
+				child_layer = (*i);
+			}
+		}
+	}
+	return child_layer;
+}
+
 
 int
 Instance::get_visible_canvases()const
@@ -198,7 +229,7 @@ studio::Instance::run_plugin(std::string plugin_path)
 {
 	handle<synfigapp::UIInterface> uim = this->find_canvas_view(this->get_canvas())->get_ui_interface();
 
-	string message = strprintf(_("Do you realy want to run plugin for file \"%s\"?" ),
+	string message = strprintf(_("Do you really want to run plugin for file \"%s\"?" ),
 				this->get_canvas()->get_name().c_str());
 
 	string details = strprintf(_("This operation cannot be undone and all undo history will be cleared."));
@@ -533,7 +564,7 @@ Instance::close()
 		(*iter)->hide();
 
 	// Consume pending events before deleting the canvas views
-	while(studio::App::events_pending())studio::App::iteration(true);
+	App::process_all_events();
 
 	// Delete all of the canvas views
 	canvas_view_list().clear();
@@ -1384,6 +1415,8 @@ Instance::make_param_menu(Gtk::Menu *menu,synfig::Canvas::Handle canvas, synfiga
 		ADD_IMAGE_MENU_ITEM(TYPE_SQUARED, "synfig-squared_interpolation", "Cusp Before: Squared")
 		ADD_IMAGE_MENU_ITEM(TYPE_PEAK, "synfig-peak_interpolation", "Cusp Before: Peak")
 		ADD_IMAGE_MENU_ITEM(TYPE_FLAT, "synfig-flat_interpolation", "Cusp Before: Flat")
+		ADD_IMAGE_MENU_ITEM(TYPE_INNER_ROUNDED, "synfig-rounded_interpolation", "Cusp Before: Inner Rounded")
+		ADD_IMAGE_MENU_ITEM(TYPE_INNER_PEAK, "synfig-peak_interpolation", "Cusp Before: Off-Peak")
 
 		///////
 		item = Gtk::manage(new Gtk::SeparatorMenuItem());
@@ -1399,6 +1432,8 @@ Instance::make_param_menu(Gtk::Menu *menu,synfig::Canvas::Handle canvas, synfiga
 		ADD_IMAGE_MENU_ITEM(TYPE_SQUARED, "synfig-squared_interpolation", "Cusp After: Squared")
 		ADD_IMAGE_MENU_ITEM(TYPE_PEAK, "synfig-peak_interpolation", "Cusp After: Peak")
 		ADD_IMAGE_MENU_ITEM(TYPE_FLAT, "synfig-flat_interpolation", "Cusp After: Flat")
+		ADD_IMAGE_MENU_ITEM(TYPE_INNER_ROUNDED, "synfig-rounded_interpolation", "Cusp After: Inner Rounded")
+		ADD_IMAGE_MENU_ITEM(TYPE_INNER_PEAK, "synfig-peak_interpolation", "Cusp After: Off-Peak")
 
 		///////
 		item = Gtk::manage(new Gtk::SeparatorMenuItem());
@@ -1592,14 +1627,13 @@ Instance::make_param_menu(Gtk::Menu *menu,synfig::Canvas::Handle canvas,const st
 		make_param_menu(menu,canvas,value_desc, 0.f, false);
 }
 
-
 void
 Instance::gather_uri(std::set<synfig::String> &x, const synfig::ValueNode::Handle &value_node) const
-{
+{	//check for null value
 	if (!value_node || !value_node->get_parent_canvas()) return;
-
+	
 	LinkableValueNode::Handle linkable_value_node = LinkableValueNode::Handle::cast_dynamic(value_node);
-	if (!linkable_value_node) return;
+	if (!linkable_value_node) return;	//check that linkable_value_node is not empty
 
 	FileSystem::Handle file_system = value_node->get_parent_canvas()->get_file_system();
 	if (!file_system) return;
@@ -1631,26 +1665,58 @@ void
 Instance::gather_uri(std::set<synfig::String> &x, const synfig::Layer::Handle &layer) const
 {
 	if (!layer || !layer->get_canvas()) return;
+	int count =0; //will be used to count layers in the group
 
+	synfig::Layer::Handle layerfinal,child_layer;
+ 	//insideSwitch = false;
+	
+	//check if the layer is switch layer
+	if (etl::handle<Layer_PasteCanvas> paste = etl::handle<Layer_PasteCanvas>::cast_dynamic(layer)) 
+	{	
+		child_layer = layer_inside_switch(paste);
+		// reference_layer = layer;
+		// synfig::Canvas::Handle canvas = paste->get_sub_canvas();
+		// 	if(canvas)
+		// 	{
+		// 		insideSwitch = true;
+		// 		for(IndependentContext i = canvas->get_independent_context(); *i; i++)
+		// 		{
+		// 			child_layer = (*i);
+		// 			count++;
+		// 			if(count>1) break;
+		// 		}
+		// 	}
+	}
+	
 	FileSystem::Handle file_system = layer->get_canvas()->get_file_system();
 	if (!file_system) return;
 
-	ParamVocab vocab = layer->get_param_vocab();
+	//if yes then the layer inside group should be processed not the group!
+	if(etl::handle<Layer_Bitmap> test = etl::handle<Layer_Bitmap>::cast_dynamic(child_layer))
+	{
+		layerfinal = child_layer;
+	}
+	else
+	{
+		layerfinal = layer;
+	}
+
+	ParamVocab vocab = layerfinal->get_param_vocab();
 	for(ParamVocab::const_iterator i = vocab.begin(); i != vocab.end(); ++i)
 	{
 		if (i->get_hint() == "filename")
 		{
-			ValueBase v = layer->get_param(i->get_name());
+			ValueBase v = layerfinal->get_param(i->get_name());
 			if (v.can_get(String()))
 			{
-				String filename = CanvasFileNaming::make_full_filename(layer->get_canvas()->get_file_name(), v.get(String()));
+				String filename = CanvasFileNaming::make_full_filename(layerfinal->get_canvas()->get_file_name(), v.get(String()));
 				String uri = file_system->get_real_uri(filename);
 				if (!uri.empty()) x.insert(uri);
 			}
 		}
 
-		Layer::DynamicParamList::const_iterator j = layer->dynamic_param_list().find(i->get_name());
-		if (j != layer->dynamic_param_list().end() && j->second)
+		Layer::DynamicParamList::const_iterator j = layerfinal->dynamic_param_list().find(i->get_name());
+		if (j != layerfinal->dynamic_param_list().end() && j->second)
 			gather_uri(x, j->second);
 	}
 
@@ -1670,6 +1736,9 @@ Instance::gather_uri(std::set<synfig::String> &x, const synfig::Canvas::Handle &
 		gather_uri(x, *i);
 }
 
+// this is the second function for gather_uri - call it gather_uri(set, layerlist)
+// iterate through all the layers and call gather_uri(set, layer) for each saperate layer 
+
 void
 Instance::gather_uri(std::set<synfig::String> &x, const synfigapp::SelectionManager::LayerList &layers) const
 {
@@ -1677,6 +1746,7 @@ Instance::gather_uri(std::set<synfig::String> &x, const synfigapp::SelectionMana
 		gather_uri(x, *i);
 }
 
+// this is the entry point for gather_uri - call it gather_uri(map, layerlist)
 void
 Instance::gather_uri(std::map<synfig::String, synfig::String> &x, const synfigapp::SelectionManager::LayerList &layers) const
 {
@@ -1719,15 +1789,56 @@ Instance::add_special_layer_actions_to_menu(Gtk::Menu *menu, const synfigapp::Se
 	gather_uri(uris, layers);
 	for(std::map<String, String>::const_iterator i = uris.begin(); i != uris.end(); ++i)
 	{
-		Gtk::MenuItem *item = manage(new Gtk::ImageMenuItem(Gtk::Stock::OPEN));
-		item->set_label( (String(_("Open file")) + " '" + i->first + "'").c_str() );
-		item->signal_activate().connect(
-			sigc::bind(sigc::ptr_fun(&App::open_uri), i->second) );
-		item->show();
-		menu->append(*item);
+		if(is_img(filename_extension(i->second)))// check if layer is image
+		{
+			Gtk::MenuItem *item = manage(new Gtk::ImageMenuItem(Gtk::Stock::OPEN));
+			item->set_label( (String(_("Edit image in external tool..."))).c_str() );
+			item->signal_activate().connect(
+				sigc::bind(sigc::ptr_fun(&App::open_img_in_external), i->second) );
+			item->show();
+			menu->append(*item);
+		}
+		else
+		{
+			Gtk::MenuItem *item = manage(new Gtk::ImageMenuItem(Gtk::Stock::OPEN));
+			item->set_label( (String(_("Open file")) + " '" + i->first + "'").c_str() );
+			item->signal_activate().connect(
+				sigc::bind(sigc::ptr_fun(&App::open_uri), i->second) );
+			item->show();
+			menu->append(*item);	
+		}
+	}
+	if(layers.size()==1)
+	{
+		if(etl::handle<Layer_Bitmap> my_layer_bitmap = etl::handle<Layer_Bitmap>::cast_dynamic(layers.front()))
+		{
+				std::cout<<"layer bitmap only\n";
+				Gtk::MenuItem *item2 = manage(new Gtk::ImageMenuItem(Gtk::Stock::CONVERT));
+				item2->set_label( (String(_("Convert to Vector"))).c_str() );
+				item2->signal_activate().connect(
+					sigc::bind(sigc::ptr_fun(&App::open_vectorizerpopup), my_layer_bitmap,layers.front()) );
+				item2->show();
+				menu->append(*item2);
+		}
+		else if(etl::handle<Layer_PasteCanvas> reference_layer = etl::handle<Layer_PasteCanvas>::cast_dynamic(layers.front()))
+		{
+			//the layer selected is a switch group
+			if(etl::handle<Layer_Bitmap> my_layer_bitmap = etl::handle<Layer_Bitmap>::cast_dynamic(layer_inside_switch(reference_layer)))
+			{
+				std::cout<<"layer bitmap + reference\n";
+				Gtk::MenuItem *item2 = manage(new Gtk::ImageMenuItem(Gtk::Stock::CONVERT));
+				item2->set_label( (String(_("Convert to Vector menu"))).c_str() );
+				item2->signal_activate().connect(
+					sigc::bind(sigc::ptr_fun(&App::open_vectorizerpopup), my_layer_bitmap,layers.front()) );
+				item2->show();
+				menu->append(*item2);
+			} 
+		}
 	}
 }
 
+// called whenever we right click any layer under layers panel
+// arguments - action_group: the current group of actions on the right click menu, layers: layerlist(because we can select multiple layer and then right click) 
 void
 Instance::add_special_layer_actions_to_group(const Glib::RefPtr<Gtk::ActionGroup>& action_group, synfig::String& ui_info, const synfigapp::SelectionManager::LayerList &layers) const
 {
@@ -1737,13 +1848,60 @@ Instance::add_special_layer_actions_to_group(const Glib::RefPtr<Gtk::ActionGroup
 	for(std::map<String, String>::const_iterator i = uris.begin(); i != uris.end(); ++i, ++index)
 	{
 		String action_name = etl::strprintf("special-action-open-file-%d", index);
-		String local_name = String(_("Open file")) + " '" + i->first + "'";
-		action_group->add(
-			Gtk::Action::create(
-				action_name,
-				Gtk::Stock::OPEN,
-				local_name, local_name ),
-			sigc::bind(sigc::ptr_fun(&App::open_uri), i->second) );
-		ui_info += strprintf("<menuitem action='%s' />", action_name.c_str());
+		//if the import layer is type image 
+		if(is_img(filename_extension(i->second)))
+		{
+			String local_name = String(_("Edit image in external tool..."));
+			action_group->add(
+				Gtk::Action::create(
+					action_name,
+					Gtk::Stock::OPEN,
+					local_name, local_name ),
+				sigc::bind(sigc::ptr_fun(&App::open_img_in_external), i->second) ); 
+			ui_info += strprintf("<menuitem action='%s' />", action_name.c_str());
+		}
+		else
+		{
+			String local_name = String(_("Open file")) + " '" + i->first + "'";
+			action_group->add(
+				Gtk::Action::create(
+					action_name,
+					Gtk::Stock::OPEN,
+					local_name, local_name ),
+				sigc::bind(sigc::ptr_fun(&App::open_uri), i->second) );
+			ui_info += strprintf("<menuitem action='%s' />", action_name.c_str());
+		}
+	}
+	if(layers.size()==1)
+	{
+		String local_name2 = String(_("Convert to Vector"));
+		String action_name2 = etl::strprintf("special-action-open-file-vectorizer-%d",index);
+		if(etl::handle<Layer_PasteCanvas> reference_layer = etl::handle<Layer_PasteCanvas>::cast_dynamic(layers.front()))
+		{
+			//the layer selected is a switch group
+			if(etl::handle<Layer_Bitmap> my_layer_bitmap = etl::handle<Layer_Bitmap>::cast_dynamic(layer_inside_switch(reference_layer)))
+			{
+				action_group->add(
+			 	Gtk::Action::create(
+			 		action_name2,
+			 		Gtk::Stock::CONVERT,
+			 		local_name2, local_name2 ),
+			 	sigc::bind(sigc::ptr_fun(&App::open_vectorizerpopup), my_layer_bitmap,layers.front()) );
+				 			ui_info += strprintf("<menuitem action='%s' />", action_name2.c_str());
+
+			} 
+		}
+		if(etl::handle<Layer_Bitmap> my_layer_bitmap = etl::handle<Layer_Bitmap>::cast_dynamic(layers.front()))
+		{
+				action_group->add(
+			 	Gtk::Action::create(
+			 		action_name2,
+			 		Gtk::Stock::CONVERT,
+			 		local_name2, local_name2 ),
+			 	sigc::bind(sigc::ptr_fun(&App::open_vectorizerpopup), my_layer_bitmap,layers.front()) );
+				 			ui_info += strprintf("<menuitem action='%s' />", action_name2.c_str());
+
+
+		}
 	}
 }

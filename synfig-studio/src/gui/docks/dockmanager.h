@@ -85,10 +85,10 @@ public:
 
 	DockDialog& find_dock_dialog(int id);
 	const DockDialog& find_dock_dialog(int id)const;
-	//! Connect to that signal to get the info a dock has been registred
+	//! Connect to that signal to get the info a dock has been registered
 	/*! \see studio::DockManager::register_dockable */
 	sigc::signal<void,Dockable*>& signal_dockable_registered() { return signal_dockable_registered_; }
-	//! Connect to that signal to get the info that a dock has been unregistred
+	//! Connect to that signal to get the info that a dock has been unregistered
 	/*! \see studio::DockManager::unregister_dockable */
 	sigc::signal<void,Dockable*>& signal_dockable_unregistered() { return signal_dockable_unregistered_; }
 
@@ -107,6 +107,8 @@ public:
 	void update_window_titles();
 
 	static std::string layout_from_template(const std::string &tpl, float dx, float dy, float sx, float sy);
+
+	void set_dock_area_visibility(bool visible, DockBook* source);
 
 	static bool swap_widgets(Gtk::Widget &widget1, Gtk::Widget &widget2);
 	static void remove_widget_recursive(Gtk::Widget &widget);

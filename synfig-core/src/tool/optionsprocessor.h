@@ -80,9 +80,9 @@ private:
 
 		std::string name, description;
 	};
-	/*! \warning These codecs are linked to the filename extensions for
-	 *  mod_ffmpeg. If you change this you must change the others accordingly.
-	 *//*
+	//! \warning These codecs are linked to the filename extensions for
+	//!  mod_ffmpeg. If you change this you must change the others accordingly.
+	//!
 	std::vector<VideoCodec> _allowed_video_codecs;
 };*/
 
@@ -95,6 +95,11 @@ public:
 	/// Settings options
 	/// verbose, quiet, threads, benchmarks
 	void process_settings_options();
+
+	/// Trivial information options
+	/// Options that will only display information
+	/// and don't need to load modules
+	void process_trivial_info_options();
 
 	/// Information options
 	/// Options that will only display information

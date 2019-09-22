@@ -125,8 +125,10 @@ synfig::Target_Cairo::render(ProgressCallback *cb)
 			context.set_render_method(CAIRO);
 
 			// Set the time that we wish to render
-			if(!get_avoid_time_sync() || canvas->get_time()!=t)
+			if(!get_avoid_time_sync() || canvas->get_time()!=t) {
 				canvas->set_time(t);
+				canvas->load_resources(t);
+			}
 
 	#ifdef SYNFIG_OPTIMIZE_LAYER_TREE
 			Canvas::Handle op_canvas;
@@ -163,7 +165,7 @@ synfig::Target_Cairo::render(ProgressCallback *cb)
 				else
 				{
 					// Put the surface we renderer onto the target's device.
-					// and destrois cairo_surface_t
+					// and destroys cairo_surface_t
 					if(!put_surface(cairo_surface_reference(surface), cb))
 					{
 						if(cb)cb->error(_("Unable to put surface on target"));
@@ -222,13 +224,17 @@ Target_Cairo::gamma_filter(cairo_surface_t *surface, const synfig::Gamma &gamma)
 		for(int x=0; x<w; x++)
 		{
 			CairoColor c=cairo_s[y][x];
-			float a=c.get_alpha();
-			unsigned char r=(unsigned char)(a*gamma.r_F32_to_F32(c.get_r()/a));
-			unsigned char g=(unsigned char)(a*gamma.g_F32_to_F32(c.get_g()/a));
-			unsigned char b=(unsigned char)(a*gamma.b_F32_to_F32(c.get_b()/a));
-			c.set_r(r);
-			c.set_g(g);
-			c.set_b(b);
+			if (c.get_alpha()) {
+				float a=c.get_alpha();
+				c.set_a(gamma.b_U8_to_U8(c.get_alpha()));
+				float aa=c.get_alpha();
+				unsigned char r=(unsigned char)(aa*gamma.r_F32_to_F32(c.get_r()/a));
+				unsigned char g=(unsigned char)(aa*gamma.g_F32_to_F32(c.get_g()/a));
+				unsigned char b=(unsigned char)(aa*gamma.b_F32_to_F32(c.get_b()/a));
+				c.set_r(r);
+				c.set_g(g);
+				c.set_b(b);
+			}
 			cairo_s[y][x]=c;
 		}
 	cairo_s.unmap_cairo_image();

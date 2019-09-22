@@ -38,7 +38,7 @@
 
 /* === C L A S S E S & S T R U C T S ======================================= */
 
-_ETL_BEGIN_NAMESPACE
+namespace etl {
 
 template <class T>
 struct generic_deleter
@@ -89,7 +89,7 @@ public:
 	/*! A new smart_ptr is created with a pointer
 		to a newly allocated object. We need
 		to be explicit with this so we don't
-		accidently have two smart_ptrs for one
+		accidentally have two smart_ptrs for one
 		object -- that would be bad.	*/
 	explicit smart_ptr(value_type* x):obj(x),refcount(x?true:false) {  }
 
@@ -356,7 +356,7 @@ template <class T> bool
 operator<(const T *lhs,const loose_smart_ptr<T> &rhs)
 	{ return (lhs<rhs.get()); }
 
-_ETL_END_NAMESPACE
+};
 
 /* === E N D =============================================================== */
 

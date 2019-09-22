@@ -1,4 +1,4 @@
-/* === S Y N F I G ========================================================= */
+// /* === S Y N F I G ========================================================= */
 /*!	\file app.cpp
 **	\brief writeme
 **
@@ -84,6 +84,7 @@
 #include <synfig/loadcanvas.h>
 #include <synfig/savecanvas.h>
 #include <synfig/layer.h>
+#include <synfig/soundprocessor.h>
 
 #include "app.h"
 #include "splash.h"
@@ -94,6 +95,7 @@
 #include "dialogs/dialog_gradient.h"
 #include "dialogs/dialog_input.h"
 #include "dialogs/dialog_setup.h"
+#include "dialogs/vectorizersettings.h"
 #include "onemoment.h"
 #include "devicetracker.h"
 #include "widgets/widget_enum.h"
@@ -153,8 +155,7 @@
 
 #include <gui/localization.h>
 
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_mixer.h>
+#include "gui/resourcehelper.h"
 
 #endif
 
@@ -170,17 +171,6 @@ using namespace studio;
 #ifndef DPM2DPI
 #define DPM2DPI(x)	(float(x)/39.3700787402f)
 #define DPI2DPM(x)	(float(x)*39.3700787402f)
-#endif
-
-#ifdef _WIN32
-#	ifdef IMAGE_DIR
-#		undef IMAGE_DIR
-#		define IMAGE_DIR "share\\pixmaps"
-#	endif
-#endif
-
-#ifndef IMAGE_DIR
-#	define IMAGE_DIR "/usr/local/share/pixmaps"
 #endif
 
 #ifndef IMAGE_EXT
@@ -279,6 +269,7 @@ studio::Dialog_Gradient    *studio::App::dialog_gradient;
 studio::Dialog_Color       *studio::App::dialog_color;
 studio::Dialog_Input       *studio::App::dialog_input;
 studio::Dialog_ToolOptions *studio::App::dialog_tool_options;
+studio::VectorizerSettings *studio::App::vectorizerpopup;
 
 studio::Dock_History       *dock_history;
 studio::Dock_Canvases      *dock_canvases;
@@ -316,6 +307,8 @@ String studio::App::predefined_fps               (DEFAULT_PREDEFINED_FPS);
 float  studio::App::preferred_fps                = 24.0;
 synfigapp::PluginManager studio::App::plugin_manager;
 std::set< String >       studio::App::brushes_path;
+String studio::App::image_editor_path;
+
 String studio::App::sequence_separator(".");
 String studio::App::navigator_renderer;
 String studio::App::workarea_renderer;
@@ -358,8 +351,8 @@ delete_widget(Gtk::Widget *widget)
 }
 
 //Static members need to be initialized outside of class declaration
-Mix_Chunk* App::gRenderDone           = NULL;
-bool       App::use_render_done_sound = true;
+SoundProcessor *App::sound_render_done = NULL;
+bool App::use_render_done_sound = true;
 
 }; // END of namespace studio
 studio::StateManager* state_manager;
@@ -431,7 +424,7 @@ public:
 	task(const std::string &task)
 	{
 		std::cerr<<task.c_str()<<std::endl;
-		while(studio::App::events_pending())studio::App::iteration(false);
+		App::process_all_events();
 		return true;
 	}
 
@@ -449,14 +442,14 @@ public:
 	warning(const std::string &err)
 	{
 		std::cerr<<"warning: "<<err.c_str()<<std::endl;
-		while(studio::App::events_pending())studio::App::iteration(false);
+		App::process_all_events();
 		return true;
 	}
 
 	virtual bool
 	amount_complete(int /*current*/, int /*total*/)
 	{
-		while(studio::App::events_pending())studio::App::iteration(false);
+		App::process_all_events();
 		return true;
 	}
 };
@@ -523,7 +516,8 @@ public:
 				value=strprintf("%f %f %f %f",
 					App::gamma.get_gamma_r(),
 					App::gamma.get_gamma_g(),
-					App::gamma.get_gamma_b()
+					App::gamma.get_gamma_b(),
+					App::gamma.get_gamma_a()
 				);
 				return true;
 			}
@@ -589,7 +583,7 @@ public:
 				value=strprintf("%i",(int)App::show_file_toolbar);
 				return true;
 			}
-			//! "Keep brushes_path" preferences entry for backward compatibilty (15/12 - v1.0.3)
+			//! "Keep brushes_path" preferences entry for backward compatibility (15/12 - v1.0.3)
 			//! Now brush path(s) are hold by input preferences : brush.path_count & brush.path_%d
 			if(key=="brushes_path")
 			{
@@ -685,7 +679,12 @@ public:
 			}
 			if(key=="ui_handle_tooltip_flag")
 			{
-				value=strprintf("%il", (long)App::ui_handle_tooltip_flag);
+				value=strprintf("%ld", (long)App::ui_handle_tooltip_flag);
+				return true;
+			}
+			if(key=="image_editor_path")
+			{
+				value=App::image_editor_path;
 				return true;
 			}
 		}
@@ -703,15 +702,12 @@ public:
 			synfig::ChangeLocale change_locale(LC_NUMERIC, "C");
 			if(key=="gamma")
 			{
-				float r,g,b;
+				float r,g,b,a = -1;
 
-				strscanf(value,"%f %f %f",
-					&r,
-					&g,
-					&b
-				);
+				strscanf(value,"%f %f %f %f", &r, &g, &b, &a);
 
-				App::gamma.set_all(r,g,b);
+				if (a <= 0) a = r;
+				App::gamma.set_all(r,g,b,a);
 
 				return true;
 			}
@@ -788,7 +784,7 @@ public:
 				App::show_file_toolbar=i;
 				return true;
 			}
-			//! "Keep brushes_path" preferences entry for backward compatibilty (15/12 - v1.0.3)
+			//! "Keep brushes_path" preferences entry for backward compatibility (15/12 - v1.0.3)
 			//! Now brush path(s) are hold by input preferences : brush.path_count & brush.path_%d
 			if(key=="brushes_path")
 			{
@@ -885,6 +881,11 @@ public:
 				App::ui_handle_tooltip_flag = l;
 				return true;
 			}
+			if(key=="image_editor_path")
+			{
+				App::image_editor_path=value;
+				return true;
+			}
 		}
 		catch(...)
 		{
@@ -929,6 +930,8 @@ public:
 		ret.push_back("use_render_done_sound");
 		ret.push_back("enable_mainwin_menubar");
 		ret.push_back("ui_handle_tooltip_flag");
+		ret.push_back("image_editor_path");
+
 
 		return ret;
 	}
@@ -949,6 +952,7 @@ init_ui_manager()
 	menus_action_group->add( Gtk::Action::create("menu-edit",            _("_Edit")));
 
 	menus_action_group->add( Gtk::Action::create("menu-view",            _("_View")));
+	menus_action_group->add( Gtk::Action::create("menu-navigation",            _("_Navigation")));
 	menus_action_group->add( Gtk::Action::create("menu-duck-mask",       _("Show/Hide Handles")));
 	menus_action_group->add( Gtk::Action::create("menu-preview-quality", _("Preview Quality")));
 	menus_action_group->add( Gtk::Action::create("menu-lowres-pixel",    _("Low-Res Pixel Size")));
@@ -966,7 +970,7 @@ init_ui_manager()
 
 	menus_action_group->add( Gtk::Action::create("menu-help",            _("_Help")));
 
-	menus_action_group->add(Gtk::Action::create("menu-keyframe",          "Keyframe"));
+	menus_action_group->add(Gtk::Action::create("menu-keyframe",          _("Keyframe")));
 
 	// Add the synfigapp actions (layer panel toolbar items, etc...)
 	synfigapp::Action::Book::iterator iter;
@@ -1042,11 +1046,6 @@ DEFINE_ACTION("quality-10", _("Use Quality Level 10"));
 for(list<int>::iterator iter = CanvasView::get_pixel_sizes().begin(); iter != CanvasView::get_pixel_sizes().end(); iter++)
   DEFINE_ACTION(strprintf("lowres-pixel-%d", *iter), strprintf(_("Set Low-Res pixel size to %d"), *iter));
 
-DEFINE_ACTION("play", _("Play"));
-// the stop is not a normal stop but a pause. So use "Pause" in UI, including TEXT and
-// icon. the internal code is still using stop.
-DEFINE_ACTION("stop", _("Pause"));
-
 DEFINE_ACTION("toggle-grid-show",  _("Toggle Grid Show"));
 DEFINE_ACTION("toggle-grid-snap",  _("Toggle Grid Snap"));
 DEFINE_ACTION("toggle-guide-show", _("Toggle Guide Show"));
@@ -1063,6 +1062,13 @@ DEFINE_ACTION("canvas-zoom-fit",             Gtk::StockID("gtk-zoom-fit"));
 DEFINE_ACTION("canvas-zoom-100",             Gtk::StockID("gtk-zoom-100"));
 DEFINE_ACTION("time-zoom-in",                Gtk::StockID("gtk-zoom-in"));
 DEFINE_ACTION("time-zoom-out",               Gtk::StockID("gtk-zoom-out"));
+
+//actions in Navigation menu
+DEFINE_ACTION("play", _("Play"));
+// the stop is not a normal stop but a pause. So use "Pause" in UI, including TEXT and
+// icon. the internal code is still using stop.
+DEFINE_ACTION("stop", _("Pause"));
+
 DEFINE_ACTION("jump-next-keyframe",          _("Seek to Next Keyframe"));
 DEFINE_ACTION("jump-prev-keyframe",          _("Seek to previous Keyframe"));
 DEFINE_ACTION("seek-next-frame",             _("Seek to Next Frame"));
@@ -1071,6 +1077,7 @@ DEFINE_ACTION("seek-next-second",            _("Seek Forward"));
 DEFINE_ACTION("seek-prev-second",            _("Seek Backward"));
 DEFINE_ACTION("seek-begin",                  _("Seek to Begin"));
 DEFINE_ACTION("seek-end",                    _("Seek to End"));
+
 
 // actions in Canvas menu
 DEFINE_ACTION("properties", _("Properties..."));
@@ -1085,9 +1092,9 @@ DEFINE_ACTION("workspace-compositing", _("Compositing"));
 DEFINE_ACTION("workspace-default",     _("Default"));
 DEFINE_ACTION("workspace-animating",   _("Animating"));
 DEFINE_ACTION("dialog-flipbook",       _("Preview Dialog"));
-DEFINE_ACTION("panel-toolbox",           "Toolbox");
+DEFINE_ACTION("panel-toolbox",         _("Toolbox"));
 DEFINE_ACTION("panel-tool_options",    _("Tool Options"));
-DEFINE_ACTION("panel-history",           "History");
+DEFINE_ACTION("panel-history",         _("History"));
 DEFINE_ACTION("panel-canvases",        _("Canvas Browser"));
 DEFINE_ACTION("panel-keyframes",       _("Keyframes"));
 DEFINE_ACTION("panel-layers",          _("Layers"));
@@ -1110,7 +1117,7 @@ DEFINE_ACTION("help-support",   Gtk::Stock::HELP);
 DEFINE_ACTION("help-about",     Gtk::StockID("synfig-about"));
 
 // actions: Keyframe
-DEFINE_ACTION("keyframe-properties", "Properties");
+DEFINE_ACTION("keyframe-properties", _("Properties"));
 
 
 //Layout the actions in the main menu (caret menu, right click on canvas menu) and toolbar:
@@ -1192,9 +1199,6 @@ DEFINE_ACTION("keyframe-properties", "Properties");
 	ui_info_menu +=
 "		</menu>"
 "		<separator name='sep-view1'/>"
-"		<menuitem action='play'/>"
-"		<menuitem action='stop'/>"
-"		<separator name='sep-view2'/>"
 "		<menuitem action='toggle-grid-show'/>"
 "		<menuitem action='toggle-grid-snap'/>"
 "		<menuitem action='toggle-guide-show'/>"
@@ -1202,15 +1206,19 @@ DEFINE_ACTION("keyframe-properties", "Properties");
 "		<menuitem action='toggle-low-res'/>"
 "		<menuitem action='toggle-background-rendering'/>"
 "		<menuitem action='toggle-onion-skin'/>"
-"		<separator name='sep-view3'/>"
+"		<separator name='sep-view2'/>"
 "		<menuitem action='canvas-zoom-in'/>"
 "		<menuitem action='canvas-zoom-out'/>"
 "		<menuitem action='canvas-zoom-fit'/>"
 "		<menuitem action='canvas-zoom-100'/>"
-"		<separator name='sep-view4'/>"
+"		<separator name='sep-view3'/>"
 "		<menuitem action='time-zoom-in'/>"
 "		<menuitem action='time-zoom-out'/>"
-"		<separator name='sep-view5'/>"
+"	</menu>"
+"    <menu action='menu-navigation'>"
+"		<menuitem action='play'/>"
+"		<menuitem action='stop'/>"
+"		<separator name='sep-view1'/>"
 "		<menuitem action='jump-prev-keyframe'/>"
 "		<menuitem action='jump-next-keyframe'/>"
 "		<menuitem action='seek-prev-frame'/>"
@@ -1404,7 +1412,7 @@ DEFINE_ACTION("keyframe-properties", "Properties");
 	ACCEL("<Control>0",								"<Actions>/canvasview/quality-10"					);
 	ACCEL("<Control>z",								"<Actions>/action_group_dock_history/undo"				);
 	ACCEL("<Control>r",								"<Actions>/action_group_dock_history/redo"				);
-	ACCEL2(Gtk::AccelKey(GDK_KEY_Delete,Gdk::CONTROL_MASK,				"<Actions>/action_group_layer_action_manager/action-LayerRemove"	));
+	ACCEL2(Gtk::AccelKey(GDK_KEY_Delete,Gdk::ModifierType(),				"<Actions>/action_group_layer_action_manager/action-LayerRemove"	));
 	ACCEL2(Gtk::AccelKey('(',Gdk::CONTROL_MASK,					"<Actions>/canvasview/decrease-low-res-pixel-size"			));
 	ACCEL2(Gtk::AccelKey(')',Gdk::CONTROL_MASK,					"<Actions>/canvasview/increase-low-res-pixel-size"			));
 	ACCEL2(Gtk::AccelKey('(',Gdk::MOD1_MASK|Gdk::CONTROL_MASK,			"<Actions>/action_group_layer_action_manager/amount-dec"		));
@@ -1422,8 +1430,6 @@ DEFINE_ACTION("keyframe-properties", "Properties");
 	ACCEL("<Mod1>o",								"<Actions>/canvasview/toggle-onion-skin"				);
 	ACCEL("<Control><Shift>z",							"<Actions>/canvasview/canvas-zoom-fit"					);
 	ACCEL("<Control>p",								"<Actions>/canvasview/play"						);
-	ACCEL("Home",									"<Actions>/canvasview/seek-begin"					);
-	ACCEL("End",									"<Actions>/canvasview/seek-end"						);
 
 
 #undef ACCEL
@@ -1437,8 +1443,7 @@ DEFINE_ACTION("keyframe-properties", "Properties");
 /* === M E T H O D S ======================================================= */
 
 App::App(const synfig::String& basepath, int *argc, char ***argv):
-	Gtk::Main(argc,argv),
-	IconController(basepath)
+	Gtk::Main(argc,argv)
 {
 
 	Glib::init(); // need to use Gio functions before app is started
@@ -1451,24 +1456,35 @@ App::App(const synfig::String& basepath, int *argc, char ***argv):
 		Glib::setenv ("LANGUAGE",  App::ui_language.c_str(), 1);
 	}
 
-	std::string path_to_icons;
+	// paths
 #ifdef _WIN32
-	path_to_icons=basepath+ETL_DIRECTORY_SEPARATOR+".."+ETL_DIRECTORY_SEPARATOR+IMAGE_DIR;
+	String path_to_plugins = get_base_path()
+		+ ETL_DIRECTORY_SEPARATOR + PLUGIN_DIR;
+	String path_to_sounds = get_base_path()
+		+ ETL_DIRECTORY_SEPARATOR + SOUND_DIR;
 #else
-	path_to_icons=IMAGE_DIR;
+	String path_to_plugins = PLUGIN_DIR;
+	String path_to_sounds = SOUND_DIR;
 #endif
-	char* synfig_root=getenv("SYNFIG_ROOT");
-	if(synfig_root) {
-		path_to_icons=synfig_root;
-		path_to_icons+=ETL_DIRECTORY_SEPARATOR;
-		path_to_icons+="share";
-		path_to_icons+=ETL_DIRECTORY_SEPARATOR;
-		path_to_icons+="pixmaps";
-		path_to_icons+=ETL_DIRECTORY_SEPARATOR;
-		path_to_icons+="synfigstudio";
+
+	String path_to_icons = ResourceHelper::get_image_path();
+
+	if (char* synfig_root = getenv("SYNFIG_ROOT")) {
+		path_to_plugins = String(synfig_root)
+			+ ETL_DIRECTORY_SEPARATOR + "share"
+			+ ETL_DIRECTORY_SEPARATOR + "synfig"
+			+ ETL_DIRECTORY_SEPARATOR + "plugins";
+		path_to_sounds = String(synfig_root)
+			+ ETL_DIRECTORY_SEPARATOR + "share"
+			+ ETL_DIRECTORY_SEPARATOR + "synfig"
+			+ ETL_DIRECTORY_SEPARATOR + "sounds";
 	}
-	path_to_icons+=ETL_DIRECTORY_SEPARATOR;
-	init_icons(path_to_icons);
+
+	String path_to_user_plugins = synfigapp::Main::get_user_app_directory()
+		+ ETL_DIRECTORY_SEPARATOR + "plugins";
+	
+	// icons
+	init_icons(path_to_icons + ETL_DIRECTORY_SEPARATOR);
 
 	ui_interface_=new GlobalUIInterface();
 
@@ -1478,6 +1494,13 @@ App::App(const synfig::String& basepath, int *argc, char ***argv):
 		Glib::thread_init();
 
 	distance_system=Distance::SYSTEM_PIXELS;
+	
+#ifdef _WIN32
+	// Do not show "No disc in drive" errors
+	// - https://github.com/synfig/synfig/issues/489
+	// - https://github.com/synfig/synfig/issues/724
+	SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+#endif
 
 	if(mkdir(synfigapp::Main::get_user_app_directory().c_str(),ACCESSPERMS)<0)
 	{
@@ -1554,29 +1577,11 @@ App::App(const synfig::String& basepath, int *argc, char ***argv):
 		load_settings("pref.default_background_layer_color");
 		load_settings("pref.default_background_layer_image");
 		load_settings("pref.preview_background_color");
+		load_settings("pref.image_editor_path");
 
 		studio_init_cb.task(_("Loading Plugins..."));
-
-		std::string pluginsprefix;
-
-		// system plugins path
-#ifdef _WIN32
-		pluginsprefix=App::get_base_path()+ETL_DIRECTORY_SEPARATOR+PLUGIN_DIR;
-#else
-		pluginsprefix=PLUGIN_DIR;
-#endif
-		char* synfig_root=getenv("SYNFIG_ROOT");
-		if(synfig_root) {
-			pluginsprefix=std::string(synfig_root)
-				+ETL_DIRECTORY_SEPARATOR+"share"
-				+ETL_DIRECTORY_SEPARATOR+"synfig"
-				+ETL_DIRECTORY_SEPARATOR+"plugins";
-		}
-		plugin_manager.load_dir(pluginsprefix);
-
-		// user plugins path
-		pluginsprefix=Glib::build_filename(synfigapp::Main::get_user_app_directory(),"plugins");
-		plugin_manager.load_dir(pluginsprefix);
+		plugin_manager.load_dir(path_to_plugins);
+		plugin_manager.load_dir(path_to_user_plugins);
 
 		studio_init_cb.task(_("Init UI Manager..."));
 		App::ui_manager_=studio::UIManager::create();
@@ -1717,7 +1722,7 @@ App::App(const synfig::String& basepath, int *argc, char ***argv):
 		/* other */
 		state_manager->add_state(&state_text);
 		if(!getenv("SYNFIG_DISABLE_SKETCH" )) state_manager->add_state(&state_sketch);
-		if(!getenv("SYNFIG_DISABLE_BRUSH"  )) state_manager->add_state(&state_brush);
+		if(!getenv("SYNFIG_DISABLE_BRUSH"  ) && App::enable_experimental_features) state_manager->add_state(&state_brush);
 		state_manager->add_state(&state_zoom);
 
 
@@ -1840,49 +1845,13 @@ App::App(const synfig::String& basepath, int *argc, char ***argv):
 		get_ui_interface()->error(_("Unknown exception caught when constructing App.\nThis software may be unstable."));
 	}
 
-	//<!- ----- SDL2 - Sound effects -----
-	//Initialize SDL
-	if( SDL_Init( SDL_INIT_AUDIO ) < 0 )
-	{
-		synfig::error( _("SDL could not initialize! SDL Error: %s\n"), SDL_GetError() );
-	}
-
-	//Initialize SDL_mixer
-	if( Mix_OpenAudio( 44100, MIX_DEFAULT_FORMAT, 2, 2048 ) == -1 )
-	{
-		synfig::error( _("SDL_mixer could not initialize! SDL_mixer Error: %s\n"), Mix_GetError() );
-	}
-
-	// system sounds path
-	std::string path_to_sounds;
-	#ifdef _WIN32
-    path_to_sounds = basepath + ETL_DIRECTORY_SEPARATOR + ".." + ETL_DIRECTORY_SEPARATOR + SOUND_DIR;
-  #else
-		path_to_sounds = SOUND_DIR;
-	#endif
-
-	//char* synfig_root = getenv("SYNFIG_ROOT"); //Already declared before
-	synfig_root = getenv("SYNFIG_ROOT"); //Already declared before
-	if(synfig_root) {
-		path_to_sounds = std::string(synfig_root)
-			+ ETL_DIRECTORY_SEPARATOR + "share"
-			+ ETL_DIRECTORY_SEPARATOR + "synfig"
-			+ ETL_DIRECTORY_SEPARATOR + "sounds";
-	}
-
-  path_to_sounds += ETL_DIRECTORY_SEPARATOR;
-
-  //Load sound effects
-	App::gRenderDone = Mix_LoadWAV( (path_to_sounds + "renderdone.wav").c_str() );
-	if ( App::gRenderDone == NULL ) {
-		synfig::error( _("SDL_mixer could not load gRenderDone : %s\n"), Mix_GetError() );
-	}  else {
-    Mix_VolumeChunk(App::gRenderDone, MIX_MAX_VOLUME/2);
-  }
-	//----- SDL2 - Sound effects ----- ->
+	// Load sound effects
+	sound_render_done = new SoundProcessor();
+	sound_render_done->addSound(
+		SoundProcessor::PlayOptions(),
+		SoundProcessor::Sound(path_to_sounds + ETL_DIRECTORY_SEPARATOR + "renderdone.wav") );
 	
 	App::dock_info_ = dock_info;
-
 }
 
 StateManager* App::get_state_manager() { return state_manager; }
@@ -1925,15 +1894,8 @@ App::~App()
 
 	instance_list.clear();
 
-	//<!- ----- SDL2 - Sound effects -----
-	//Free the sound effects
-	Mix_FreeChunk( App::gRenderDone );
-	App::gRenderDone = NULL;
-
-	//Quit SDL subsystems
-	Mix_Quit();
-	SDL_Quit();
-	//----- SDL2 - Sound effects ----- ->
+	if (sound_render_done) delete sound_render_done;
+	sound_render_done = NULL;
 }
 
 synfig::String
@@ -2081,7 +2043,7 @@ App::save_settings()
 			for(iter=recent_files.rbegin();iter!=recent_files.rend();iter++)
 				file<<(*iter).c_str()<<endl;
 		}while(0);
-		std::string filename=get_config_file("settings-1.0");
+		std::string filename=get_config_file("settings-1.3");
 		synfigapp::Main::settings().save_to_file(filename);
 
 	}
@@ -2098,7 +2060,7 @@ App::load_settings(const synfig::String& key_filter)
 	try
 	{
 		synfig::ChangeLocale change_locale(LC_NUMERIC, "C");
-		std::string filename=get_config_file("settings-1.0");
+		std::string filename=get_config_file("settings-1.3");
 		ret=synfigapp::Main::settings().load_from_file(filename, key_filter);
 	}
 	catch(...)
@@ -2322,6 +2284,8 @@ App::restore_default_settings()
 	synfigapp::Main::settings().set_value("pref.ui_handle_tooltip_flag",         temp.str());
 	synfigapp::Main::settings().set_value("pref.autosave_backup",                "1");
 	synfigapp::Main::settings().set_value("pref.autosave_backup_interval",       "15000");
+	synfigapp::Main::settings().set_value("pref.image_editor_path",             "");
+
 }
 
 void
@@ -2355,6 +2319,7 @@ App::apply_gtk_settings()
 	data += ".button > GtkLabel                 { padding-top: 0px; padding-bottom: 0px; }\n";
 	data += "GtkComboBox > .button > GtkBox > * { padding-top: 0px; padding-bottom: 0px; }\n";
 	data += ".entry                             { padding-top: 0px; padding-bottom: 0px; }\n";
+	data += "progress, trough 					{ min-height: 20px; }\n";
 #if GTKMM_MAJOR_VERSION < 3 || (GTKMM_MAJOR_VERSION == 3 && GTKMM_MINOR_VERSION < 22)
 	// following css works in old versions of gtk
 	data += "button { padding: 0px; }\n";
@@ -2370,6 +2335,8 @@ App::apply_gtk_settings()
 	g_object_get (G_OBJECT (gtk_settings), "gtk-theme-name", &theme_name, NULL);
 	if ( String(theme_name) == "Adwaita" )
 		data += ".window-frame, .window-frame:backdrop { box-shadow: none; margin: 0; }\n";
+	g_free(theme_name);
+
 	if (!data.empty()) {
 		Glib::RefPtr<Gtk::CssProvider> css = Gtk::CssProvider::create();
 		try {
@@ -2393,9 +2360,10 @@ App::shutdown_request(GdkEventAny*)
 void
 App::quit()
 {
-	if(shutdown_in_progress)return;
+	if (shutdown_in_progress) return;
 
 	get_ui_interface()->task(_("Quit Request"));
+	
 	if(Busy::count)
 	{
 		dialog_message_1b(
@@ -2403,68 +2371,13 @@ App::quit()
 			_("Tasks are currently running. Please cancel the current tasks and try again"),
 			"details",
 			_("Close"));
-
 		return;
 	}
 
-	std::list<etl::handle<Instance> >::iterator iter;
-	for(iter=instance_list.begin();!instance_list.empty();iter=instance_list.begin())
-	{
-		if(!(*iter)->safe_close())
+	while(!instance_list.empty())
+		if (!instance_list.front()->safe_close())
 			return;
-
-/*
-		if((*iter)->synfigapp::Instance::get_action_count())
-		{
-			handle<synfigapp::UIInterface> uim;
-			uim=(*iter)->find_canvas_view((*iter)->get_canvas())->get_ui_interface();
-			assert(uim);
-			string str=strprintf(_("Would you like to save your changes to %s?"),(*iter)->get_file_name().c_str() );
-			switch(uim->yes_no_cancel((*iter)->get_canvas()->get_name(),str,synfigapp::UIInterface::RESPONSE_YES))
-			{
-				case synfigapp::UIInterface::RESPONSE_NO:
-					break;
-				case synfigapp::UIInterface::RESPONSE_YES:
-					(*iter)->save();
-					break;
-				case synfigapp::UIInterface::RESPONSE_CANCEL:
-					return;
-				default:
-					assert(0);
-					return;
-			}
-		}
-
-
-		if((*iter)->synfigapp::Instance::is_modified())
-		{
-			handle<synfigapp::UIInterface> uim;
-			uim=(*iter)->find_canvas_view((*iter)->get_canvas())->get_ui_interface();
-			assert(uim);
-			string str=strprintf(_("%s has changes not yet on the CVS repository.\nWould you like to commit these changes?"),(*iter)->get_file_name().c_str() );
-			switch(uim->yes_no_cancel((*iter)->get_canvas()->get_name(),str,synfigapp::UIInterface::RESPONSE_YES))
-			{
-				case synfigapp::UIInterface::RESPONSE_NO:
-					break;
-				case synfigapp::UIInterface::RESPONSE_YES:
-					(*iter)->dialog_cvs_commit();
-					break;
-				case synfigapp::UIInterface::RESPONSE_CANCEL:
-					return;
-				default:
-					assert(0);
-					return;
-			}
-		}
-*/
-
-		// This next line causes things to crash for some reason
-		//(*iter)->close();
-	}
-
-	instance_list.clear();
-
-	while(studio::App::events_pending())studio::App::iteration(false);
+	process_all_events();
 
 	Gtk::Main::quit();
 
@@ -3543,7 +3456,50 @@ App::dialog_message_3b(const std::string &message,
 	return dialog.run();
 }
 
+static bool
+try_open_img_external(const std::string &uri)
+{
+	std::string new_uri=uri;
+	std::string s = "file://";
+	std::string::size_type i = new_uri.find(s);
+	if (i != std::string::npos)
+	{
+		new_uri.erase(i, s.length());
+	}
+   	size_t start_pos = 0;
+	std::string to = " ";
+	std::string from = "%20";
+    while((start_pos = new_uri.find(from, start_pos)) != std::string::npos) 
+	{
+        new_uri.replace(start_pos, from.length(), to);
+        start_pos += to.length(); // In case 'to' contains 'from', like replacing 'x' with 'yx'
+    }
+	new_uri = "\"" + new_uri + "\"";
+	if(App::image_editor_path!="")
+	{
+		#ifdef WIN32
+			char buffer[512];
+    		::snprintf(buffer, sizeof(buffer), "%s %s",App::image_editor_path.c_str(), new_uri.c_str());
+    		Glib::spawn_command_line_async(buffer);
+		#elif defined(__APPLE__)
+    		char buffer[512];
+    		::snprintf(buffer, sizeof(buffer), "open -a %s %s", App::image_editor_path.c_str(), new_uri.c_str());
+    		Glib::spawn_command_line_async(buffer);
+		#else
+    		char buffer[512];
+    		::snprintf(buffer, sizeof(buffer), "%s %s",App::image_editor_path.c_str(), new_uri.c_str());
+			Glib::spawn_command_line_async(buffer);
+		#endif
+		return true;
 
+	}
+	else
+	{
+		return false;
+	}
+	
+	
+}
 static bool
 try_open_uri(const std::string &uri)
 {
@@ -3556,6 +3512,7 @@ try_open_uri(const std::string &uri)
 #endif
 }
 
+
 void
 App::dialog_help()
 {
@@ -3567,7 +3524,27 @@ App::dialog_help()
 		dialog.run();
 	}
 }
+void App::open_img_in_external(const std::string &uri)
+{
+	synfig::info("Opening with external tool: " + uri);
+	if(!try_open_img_external(uri))
+	{
+		Gtk::MessageDialog dialog(*App::main_window, _("Make sure Preferred editing tool was set in \n Edit->Preferences->Editing:"), false, Gtk::MESSAGE_ERROR, Gtk::BUTTONS_CLOSE, true);
+		dialog.set_secondary_text(uri);
+		dialog.set_title(_("Error"));
+		dialog.run();
+	}
 
+}
+unordered_map<std::string, int> configmap({ { "threshold", 8 },{ "accuracy", 9 },{ "despeckling", 5 },{ "maxthickness", 200 }});
+void App::open_vectorizerpopup(const etl::handle<synfig::Layer_Bitmap> my_layer_bitmap, const etl::handle<synfig::Layer> reference_layer)
+{
+	String desc = my_layer_bitmap->get_description();
+	synfig::info("Opening Vectorizerpopup for :"+desc);
+	App::vectorizerpopup = new studio::VectorizerSettings(*App::main_window,my_layer_bitmap,selected_instance,configmap,reference_layer);
+	App::vectorizerpopup->show();
+
+}
 void App::open_uri(const std::string &uri)
 {
 	synfig::info("Opening URI: " + uri);
@@ -3680,7 +3657,7 @@ App::wrap_into_temporary_filesystem(
 	FileSystemTemporary::Handle temporary_file_system = new FileSystemTemporary("instance", get_temporary_directory(), canvas_file_system);
 	temporary_file_system->set_meta("filename", filename);
 	temporary_file_system->set_meta("as", as);
-	temporary_file_system->set_meta("truncate", etl::strprintf("%d", truncate_storage_size));
+	temporary_file_system->set_meta("truncate", etl::strprintf("%lld", truncate_storage_size));
 	return temporary_file_system;
 }
 
@@ -3865,7 +3842,7 @@ App::open_from_temporary_filesystem(std::string temporary_filename)
 			one_moment.hide();
 
 			if(instance->is_updated() && App::dialog_message_2b(
-				_("Newer version of this file avaliable on the CVS repository!"),
+				_("Newer version of this file available on the CVS repository!"),
 				_("Would you like to update now (It would probably be a good idea)"),
 				Gtk::MESSAGE_QUESTION,
 				_("Cancel"),
@@ -3925,7 +3902,7 @@ App::new_instance()
 	canvas->rend_desc().set_time_end(5.0);
 	canvas->rend_desc().set_x_res(DPI2DPM(72.0f));
 	canvas->rend_desc().set_y_res(DPI2DPM(72.0f));
-	// The top left and botton right positions are expressed in units
+	// The top left and bottom right positions are expressed in units
 	// Original convention is that 1 unit = 60 pixels
 	canvas->rend_desc().set_tl(Vector(-(preferred_x_size/60.0)/2.0,  (preferred_y_size/60.0)/2.0));
 	canvas->rend_desc().set_br(Vector( (preferred_x_size/60.0)/2.0, -(preferred_y_size/60.0)/2.0));
@@ -4071,59 +4048,45 @@ App::dialog_open(string filename)
 void
 App::set_selected_instance(etl::loose_handle<Instance> instance)
 {
-/*	if(get_selected_instance()==instance)
-	{
-		selected_instance=instance;
-		signal_instance_selected()(instance);
+	if (selected_instance == instance)
 		return;
-	}
-	else
-	{
-*/
-		selected_instance=instance;
-		if(get_selected_canvas_view() && get_selected_canvas_view()->get_instance()!=instance)
-		{
-			if(instance)
-			{
-				instance->focus(instance->get_canvas());
-			}
-			else
-				set_selected_canvas_view(0);
+	
+	if (get_selected_canvas_view() && get_selected_canvas_view()->get_instance() != instance) {
+		if (instance) {
+			instance->focus( instance->get_canvas() );
+		} else {
+			set_selected_canvas_view(0);
 		}
-		signal_instance_selected()(instance);
+	} else {
+		selected_instance = instance;
+		signal_instance_selected()(selected_instance);
+	}
 }
 
 void
 App::set_selected_canvas_view(etl::loose_handle<CanvasView> canvas_view)
 {
-	if(selected_canvas_view != canvas_view)
-	{
-		etl::loose_handle<CanvasView> prev = selected_canvas_view;
-		selected_canvas_view = NULL;
-		if (prev) prev->deactivate();
-		selected_canvas_view = canvas_view;
-		signal_canvas_view_focus()(selected_canvas_view);
-		if (selected_canvas_view) selected_canvas_view->activate();
-	}
-
-	if(canvas_view)
-	{
-		selected_instance=canvas_view->get_instance();
-		signal_instance_selected()(selected_instance);
-	}
-
-/*
-	if(get_selected_canvas_view()==canvas_view)
-	{
-		signal_canvas_view_focus()(selected_canvas_view);
-		signal_instance_selected()(canvas_view->get_instance());
+	if (selected_canvas_view == canvas_view)
 		return;
+	
+	etl::loose_handle<CanvasView> prev = selected_canvas_view;
+	etl::loose_handle<Instance> prev_instance = selected_instance;
+
+	selected_canvas_view.reset();
+	if (prev)
+		prev->deactivate();
+
+	selected_canvas_view = canvas_view;
+	if (selected_canvas_view) {
+		selected_instance = canvas_view->get_instance();
+		selected_canvas_view->activate();
+	} else {
+		selected_instance.reset();
 	}
-	selected_canvas_view=canvas_view;
-	if(canvas_view && canvas_view->get_instance() != get_selected_instance())
-		set_selected_instance(canvas_view->get_instance());
+
 	signal_canvas_view_focus()(selected_canvas_view);
-*/
+	if (selected_instance != prev_instance)
+		signal_instance_selected()(selected_instance);
 }
 
 etl::loose_handle<Instance>
@@ -4184,12 +4147,12 @@ studio::App::setup_changed()
 }
 
 void
-studio::App::process_all_events()
+studio::App::process_all_events(long unsigned int us)
 {
-	Glib::usleep(1);
+	Glib::usleep(us);
 	while(studio::App::events_pending()) {
 		while(studio::App::events_pending())
 			studio::App::iteration(false);
-		Glib::usleep(1);
+		Glib::usleep(us);
 	}
 }

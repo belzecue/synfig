@@ -76,6 +76,7 @@ Dialog_Setup::Dialog_Setup(Gtk::Window& parent):
 	adj_gamma_r(Gtk::Adjustment::create(2.2,0.1,3.0,0.025,0.025,0.025)),
 	adj_gamma_g(Gtk::Adjustment::create(2.2,0.1,3.0,0.025,0.025,0.025)),
 	adj_gamma_b(Gtk::Adjustment::create(2.2,0.1,3.0,0.025,0.025,0.025)),
+	adj_gamma_a(Gtk::Adjustment::create(2.2,0.1,3.0,0.025,0.025,0.025)),
 	adj_recent_files(Gtk::Adjustment::create(15,1,50,1,1,0)),
 	adj_undo_depth(Gtk::Adjustment::create(100,10,5000,1,1,1)),
 	time_format(Time::FORMAT_NORMAL),
@@ -127,7 +128,7 @@ Dialog_Setup::create_gamma_page(PageInfo pi)
 	 *   red ---------x--------------
 	 * green ---------x--------------
 	 *  blue ---------x--------------
-	 * black ---------x--------------
+	 * alpha ---------x--------------
 	 *
 	 */
 
@@ -153,6 +154,12 @@ Dialog_Setup::create_gamma_page(PageInfo pi)
 	pi.grid->attach(*scale_gamma_b, 1, row, 1, 1);
 	scale_gamma_b->set_hexpand(true);
 	adj_gamma_b->signal_value_changed().connect(sigc::mem_fun(*this,&studio::Dialog_Setup::on_gamma_b_change));
+
+	Gtk::Scale* scale_gamma_a(manage(new Gtk::Scale(adj_gamma_a)));
+	attach_label(pi.grid, _("Alpha"), ++row);
+	pi.grid->attach(*scale_gamma_a, 1, row, 1, 1);
+	scale_gamma_a->set_hexpand(true);
+	adj_gamma_a->signal_value_changed().connect(sigc::mem_fun(*this,&studio::Dialog_Setup::on_gamma_a_change));
 }
 
 void
@@ -173,7 +180,6 @@ Dialog_Setup::create_system_page(PageInfo pi)
 	// System _ Units section
 	attach_label_section(pi.grid, _("Units"), row);
 	// System - 0 Timestamp
-	timestamp_menu=manage(new class Gtk::Menu());
 	attach_label(pi.grid, _("Timestamp"), ++row);
 	pi.grid->attach(timestamp_comboboxtext, 1, row, 1, 1);
 	timestamp_comboboxtext.set_hexpand(true);
@@ -264,9 +270,10 @@ Dialog_Setup::create_system_page(PageInfo pi)
 		++row;
 	}
 	// System - 11 enable_experimental_features
-	//attach_label(pi.grid, _("Experimental features (restart needed)"), ++row);
-	//pi.grid->attach(toggle_enable_experimental_features, 1, row, 1, 1);
-	//toggle_enable_experimental_features.set_hexpand(true);
+	attach_label_section(pi.grid, _("Experimental features (requires restart)"), ++row);
+	pi.grid->attach(toggle_enable_experimental_features, 1, row, 1, 1);
+	toggle_enable_experimental_features.set_halign(Gtk::ALIGN_START);
+	toggle_enable_experimental_features.set_hexpand(false);
 
 #ifdef SINGLE_THREADED
 	// System - 12 single_threaded
@@ -453,7 +460,8 @@ Dialog_Setup::create_editing_page(PageInfo pi)
 	 * OTHER
 	 *  [x] Linear color
 	 *  [x] Restrict radius
-	 *
+	 * EDIT IN EXTERNAL
+	 * 	Preferred image editor [image_editor_path] (choose..)
 	 *
 	 */
 
@@ -481,15 +489,72 @@ is black and 100 is white, then 50 is only about 22 percent of the brightness \
 of white, rather than 50% as you might expect. \
 Option (ON by default) to make sure that if you ask for 50, you get 50% of the brightness of white."));
 
-	// Editing - Restrict Really-valued Handles to Top Right Quadrant
-	attach_label(pi.grid,_("Restrict really-valued handles to top right quadrant"), ++row);
+	// Editing - Restrict Real-value Handles to Top Right Quadrant
+	attach_label(pi.grid,_("Restrict real value handles to top right quadrant"), ++row);
 	pi.grid->attach(toggle_restrict_radius_ducks, 1, row, 1, 1);
-	toggle_restrict_radius_ducks.set_halign(Gtk::ALIGN_END);
+	toggle_restrict_radius_ducks.set_halign(Gtk::ALIGN_START);
 	toggle_restrict_radius_ducks.set_hexpand(false);
 	toggle_restrict_radius_ducks.set_tooltip_text("Restrict the position of the handle \
 (especially for radius) to be in the top right quadrant of the 2D space. Allow to set \
 the real value to any number and also easily reach the value of 0.0 just \
 dragging the handle to the left bottom part of your 2D space.");
+
+	attach_label_section(pi.grid, _("Edit in external"), ++row);
+
+	attach_label(pi.grid,_("Preferred image editor"), ++row);
+
+	//create a button that will open the filechooserdialog to select image editor
+	Gtk::Button *choose_button(manage(new class Gtk::Button(Gtk::StockID(_("Choose..")))));
+	choose_button->show();
+	choose_button->set_tooltip_text("Choose the preferred Image editor for Edit in external tool option");
+	
+	//create a function to launch the dialog
+	choose_button->signal_clicked().connect(sigc::mem_fun(*this,&Dialog_Setup::on_choose_editor_pressed));
+	pi.grid->attach(image_editor_path_entry, 1, row, 1, 1);
+	pi.grid->attach(*choose_button, 2,row,1,1);
+	image_editor_path_entry.set_hexpand(true);
+	image_editor_path_entry.set_text(App::image_editor_path);
+	
+}
+
+
+void
+Dialog_Setup::on_choose_editor_pressed()
+{
+	//set the image editor path = filepath from dialog
+	String filepath = image_editor_path_entry.get_text();
+	if (select_path_dialog("Select Editor", filepath)) {
+		image_editor_path_entry.set_text(filepath);
+		App::image_editor_path = filepath;
+	}
+}
+
+bool 
+Dialog_Setup::select_path_dialog(const std::string &title, std::string &filepath)
+{
+	Gtk::FileChooserDialog *dialog = new Gtk::FileChooserDialog(*App::main_window,title, Gtk::FILE_CHOOSER_ACTION_OPEN);
+	dialog->set_transient_for(*App::main_window);
+	#ifdef WIN32
+	dialog->set_current_folder("C:\\Program Files");
+
+	#elif defined(__APPLE__)
+    dialog->set_current_folder("/Applications");
+
+	#else
+    	dialog->set_current_folder("/usr/bin");
+	#endif
+
+	//Add response buttons the the dialog:
+	dialog->add_button("_Cancel", Gtk::RESPONSE_CANCEL);
+	dialog->add_button("Select", Gtk::RESPONSE_OK);
+  	if(dialog->run() == Gtk::RESPONSE_OK) {
+		filepath = dialog->get_filename();
+		filepath = absolute_path(filepath);	//get the absolute path
+		delete dialog;
+		return true;
+	}
+	delete dialog;
+	return false;
 }
 
 void
@@ -498,7 +563,6 @@ Dialog_Setup::create_render_page(PageInfo pi)
 	/*---------Render------------------*\
 	 *
 	 *  sequence separator _________
-	 *   navigator [ Legacy ]
 	 *   workarea  [ Legacy ]
 	 *   play sound on render done  [x| ]
 	 *
@@ -509,9 +573,7 @@ Dialog_Setup::create_render_page(PageInfo pi)
 	attach_label(pi.grid, _("Image Sequence Separator String"), row);
 	pi.grid->attach(image_sequence_separator, 1, row, 1, 1);
 	image_sequence_separator.set_hexpand(true);
-	// Render - Navigator
-	attach_label(pi.grid, _("Navigator renderer"), ++row);
-	pi.grid->attach(navigator_renderer_combo, 1, row, 1, 1);
+
 	// Render - WorkArea
 	attach_label(pi.grid, _("WorkArea renderer"), ++row);
 	pi.grid->attach(workarea_renderer_combo, 1, row, 1, 1);
@@ -525,14 +587,12 @@ Dialog_Setup::create_render_page(PageInfo pi)
 			sigc::mem_fun(*this, &Dialog_Setup::on_play_sound_on_render_done_changed));
 
 	synfig::rendering::Renderer::Handle default_renderer = synfig::rendering::Renderer::get_renderer("");
-	navigator_renderer_combo.append("", String() + _("Default") + " - " + default_renderer->get_name());
 	workarea_renderer_combo.append("", String() + _("Default") + " - " + default_renderer->get_name());
 	typedef std::map<synfig::String, synfig::rendering::Renderer::Handle> RendererMap;
 	const RendererMap &renderers = synfig::rendering::Renderer::get_renderers();
 	for(RendererMap::const_iterator i = renderers.begin(); i != renderers.end(); ++i)
 	{
 		assert(!i->first.empty());
-		navigator_renderer_combo.append(i->first, i->second->get_name());
 		workarea_renderer_combo.append(i->first, i->second->get_name());
 	}
 
@@ -668,7 +728,8 @@ Dialog_Setup::on_apply_pressed()
 	App::gamma.set_all(
 		1.0/adj_gamma_r->get_value(),
 		1.0/adj_gamma_g->get_value(),
-		1.0/adj_gamma_b->get_value() );
+		1.0/adj_gamma_b->get_value(),
+		1.0/adj_gamma_a->get_value() );
 
 	App::set_max_recent_files((int)adj_recent_files->get_value());
 
@@ -710,7 +771,7 @@ Dialog_Setup::on_apply_pressed()
 	// Set file toolbar flag
 	App::show_file_toolbar=toggle_show_file_toolbar.get_active();
 
-	//! TODO Create Change mecanism has Class for being used elsewhere
+	//! TODO Create Change mechanism has Class for being used elsewhere
 	// Set the preferred brush path(s)
 	if (pref_modification_flag&CHANGE_BRUSH_PATH)
 	{
@@ -735,6 +796,9 @@ Dialog_Setup::on_apply_pressed()
 	// Set the preferred file name prefix
 	App::custom_filename_prefix = textbox_custom_filename_prefix.get_text();
 
+	// Set the preferred image editor
+	App::image_editor_path = image_editor_path_entry.get_text();
+
 	// Set the preferred new Document X dimension
 	App::preferred_x_size       = int(adj_pref_x_size->get_value());
 
@@ -753,11 +817,8 @@ Dialog_Setup::on_apply_pressed()
 	// Set the preferred image sequence separator
 	App::sequence_separator     = image_sequence_separator.get_text();
 
-	// Set the navigator render flag
-	App::navigator_renderer     = navigator_renderer_combo.get_active_id();
-
-	// Set the workarea render flag
-	App::workarea_renderer      = workarea_renderer_combo.get_active_id();
+	// Set the workarea render and navigator render flag
+	App::navigator_renderer = App::workarea_renderer  = workarea_renderer_combo.get_active_id();
 
 	// Set the use of a render done sound
 	App::use_render_done_sound  = toggle_play_sound_on_render_done.get_active();
@@ -768,8 +829,8 @@ Dialog_Setup::on_apply_pressed()
 
 	if (pref_modification_flag & CHANGE_UI_HANDLE_TOOLTIP)
 	{
-		// Set ui tooltip on widht point
-		App::ui_handle_tooltip_flag  = toggle_handle_tooltip_widthpoint.get_active()?Duck::STRUCT_WIDTHPOINT:Duck::STRUCT_NONE;
+		// Set ui tooltip on width point
+		App::ui_handle_tooltip_flag=toggle_handle_tooltip_widthpoint.get_active()?Duck::STRUCT_WIDTHPOINT:Duck::STRUCT_NONE;
 		// Set ui tooltip on radius
 		App::ui_handle_tooltip_flag |= toggle_handle_tooltip_radius.get_active()?Duck::STRUCT_RADIUS:Duck::STRUCT_NONE;
 		// Set ui tooltip on transformation
@@ -818,6 +879,14 @@ void
 Dialog_Setup::on_gamma_b_change()
 {
 	gamma_pattern.set_gamma_b(1.0/adj_gamma_b->get_value());
+	gamma_pattern.refresh();
+	gamma_pattern.queue_draw();
+}
+
+void
+Dialog_Setup::on_gamma_a_change()
+{
+	gamma_pattern.set_gamma_a(1.0/adj_gamma_a->get_value());
 	gamma_pattern.refresh();
 	gamma_pattern.queue_draw();
 }
@@ -945,10 +1014,12 @@ Dialog_Setup::refresh()
 	gamma_pattern.set_gamma_r(App::gamma.get_gamma_r());
 	gamma_pattern.set_gamma_g(App::gamma.get_gamma_g());
 	gamma_pattern.set_gamma_b(App::gamma.get_gamma_b());
+	gamma_pattern.set_gamma_a(App::gamma.get_gamma_a());
 
 	adj_gamma_r->set_value(1.0/App::gamma.get_gamma_r());
 	adj_gamma_g->set_value(1.0/App::gamma.get_gamma_g());
 	adj_gamma_b->set_value(1.0/App::gamma.get_gamma_b());
+	adj_gamma_a->set_value(1.0/App::gamma.get_gamma_a());
 
 	gamma_pattern.refresh();
 
@@ -989,10 +1060,13 @@ Dialog_Setup::refresh()
 	// Refresh the status of file toolbar flag
 	toggle_show_file_toolbar.set_active(App::show_file_toolbar);
 
+	// Refresh the preferred image editor path
+	image_editor_path_entry.set_text(App::image_editor_path);
+
 	// Refresh the brush path(s)
 	Glib::RefPtr<Gtk::ListStore> liststore = Glib::RefPtr<Gtk::ListStore>::cast_dynamic(
 			listviewtext_brushes_path->get_model());
-	//! Keep "brushes_path" preferences entry for backward compatibilty (15/12 - v1.0.3)
+	//! Keep "brushes_path" preferences entry for backward compatibility (15/12 - v1.0.3)
 	//! Now brush path(s) are hold by input preferences : brush.path_count & brush.path_%d
 	String value;
 	Gtk::TreeIter ui_iter;
@@ -1045,9 +1119,6 @@ Dialog_Setup::refresh()
 	//Refresh the sequence separator
 	image_sequence_separator.set_text(App::sequence_separator);
 
-	// Refresh the status of the navigator_renderer
-	navigator_renderer_combo.set_active_id(App::navigator_renderer);
-
 	// Refresh the status of the workarea_renderer
 	workarea_renderer_combo.set_active_id(App::workarea_renderer);
 
@@ -1079,6 +1150,7 @@ GammaPattern::GammaPattern():
 	gamma_r(),
 	gamma_g(),
 	gamma_b(),
+	gamma_a(),
 	tile_w(80),
 	tile_h(80)
 {

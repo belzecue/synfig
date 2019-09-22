@@ -180,8 +180,10 @@ synfig::Target_Scanline::render(ProgressCallback *cb)
 			context.set_render_method(SOFTWARE);
 
 			// Set the time that we wish to render
-			if(!get_avoid_time_sync() || canvas->get_time()!=t)
+			if(!get_avoid_time_sync() || canvas->get_time()!=t) {
 				canvas->set_time(t);
+				canvas->load_resources(t);
+			}
 			canvas->set_outline_grow(desc.get_outline_grow());
 
 			// If quality is set otherwise, then we use the accelerated renderer
@@ -198,7 +200,7 @@ synfig::Target_Scanline::render(ProgressCallback *cb)
 
 					rows++;
 
-					synfig::info("Render broken up into %d block%s %d pixels tall, and a final block %d pixels tall",
+					synfig::info("Render split to %d block%s %d pixels tall, and a final block %d pixels tall",
 								 rows-1, rows==2?"":"s", rowheight, lastrowheight);
 
 					// loop through all the full rows
@@ -210,7 +212,8 @@ synfig::Target_Scanline::render(ProgressCallback *cb)
 
 					for(int i=0; i < rows; ++i)
 					{
-						RendDesc	blockrd = desc;
+						surface->reset();
+						RendDesc blockrd = desc;
 
 						//render the strip at the normal size unless it's the last one...
 						if(i == rows-1)
@@ -223,6 +226,9 @@ synfig::Target_Scanline::render(ProgressCallback *cb)
 							blockrd.set_subwindow(0,i*rowheight,desc.get_w(),rowheight);
 						}
 
+						//synfig::info( " -- block %d/%d left, top, width, height: %d, %d, %d, %d",
+						//	i+1, rows, 0, i*rowheight, blockrd.get_w(), blockrd.get_h() );
+
 						if(!call_renderer(context,surface,quality,blockrd,0))
 						{
 							if(cb)cb->error(_("Accelerated Renderer Failure"));
@@ -230,7 +236,7 @@ synfig::Target_Scanline::render(ProgressCallback *cb)
 						} else {
 							SurfaceResource::LockRead<SurfaceSW> lock(surface);
 							if (!lock) {
-								if(cb)cb->error(_("Accelerated Renderer Failure"));
+								if(cb)cb->error(_("Accelerated Renderer Failure: cannot read surface"));
 								return false;
 							}
 
@@ -279,10 +285,9 @@ synfig::Target_Scanline::render(ProgressCallback *cb)
 									return false;
 								}
 							}
-
-							surface->reset();
 						}
 					}
+					surface->reset();
 
 					end_frame();
 
@@ -321,8 +326,10 @@ synfig::Target_Scanline::render(ProgressCallback *cb)
     else
     {
 		// Set the time that we wish to render
-		if(!get_avoid_time_sync() || canvas->get_time()!=t)
+		if(!get_avoid_time_sync() || canvas->get_time()!=t) {
 			canvas->set_time(t);
+			canvas->load_resources(t);
+		}
 		canvas->set_outline_grow(desc.get_outline_grow());
 		Context context = canvas->get_context(context_params);
 
@@ -341,7 +348,7 @@ synfig::Target_Scanline::render(ProgressCallback *cb)
 
 				rows++;
 
-				synfig::info("Render broken up into %d block%s %d pixels tall, and a final block %d pixels tall",
+				synfig::info("Render split to %d block%s %d pixels tall, and a final block %d pixels tall",
 							 rows-1, rows==2?"":"s", rowheight, lastrowheight);
 
 				// loop through all the full rows
@@ -353,7 +360,8 @@ synfig::Target_Scanline::render(ProgressCallback *cb)
 
 				for(int i=0; i < rows; ++i)
 				{
-					RendDesc	blockrd = desc;
+					surface->reset();
+					RendDesc blockrd = desc;
 
 					//render the strip at the normal size unless it's the last one...
 					if(i == rows-1)
@@ -366,7 +374,10 @@ synfig::Target_Scanline::render(ProgressCallback *cb)
 						blockrd.set_subwindow(0,i*rowheight,desc.get_w(),rowheight);
 					}
 
-					SuperCallback	sc(cb, i*rowheight, (i+1)*rowheight, totalheight);
+					//synfig::info( " -- block %d/%d left, top, width, height: %d, %d, %d, %d",
+					//	i+1, rows, 0, i*rowheight, blockrd.get_w(), blockrd.get_h() );
+
+					SuperCallback sc(cb, i*rowheight, (i+1)*rowheight, totalheight);
 
 					if(!call_renderer(context,surface,quality,blockrd,&sc))
 					{
@@ -431,6 +442,7 @@ synfig::Target_Scanline::render(ProgressCallback *cb)
 					//I'm done with this part
 					sc.amount_complete(100,100);
 				}
+				surface->reset();
 
 				end_frame();
 

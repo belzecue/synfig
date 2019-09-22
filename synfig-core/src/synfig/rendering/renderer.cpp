@@ -46,6 +46,7 @@
 
 #include "software/renderersw.h"
 #include "software/rendererdraftsw.h"
+#include "software/rendererpreviewsw.h"
 #include "software/rendererlowressw.h"
 #include "software/renderersafe.h"
 #ifdef WITH_OPENGL
@@ -97,6 +98,7 @@ Renderer::initialize_renderers()
 
 	// register renderers
 	register_renderer("software", new RendererSW());
+	register_renderer("software-preview", new RendererPreviewSW());
 	register_renderer("software-draft", new RendererDraftSW());
 	register_renderer("software-low2",  new RendererLowResSW(2));
 	register_renderer("software-low4",  new RendererLowResSW(4));
@@ -689,8 +691,8 @@ Renderer::find_deps(const Task::List &list, long long batch_index) const
 		task_rd.batch_index = batch_index;
 		task_rd.index = i - list.begin() + 1;
 
+		task_rd.deps.clear();
 		task_rd.back_deps.clear();
-		task_rd.deps_count = 0;
 
 		if ((*i)->is_valid()) {
 			for(Task::List::const_iterator j = (*i)->sub_tasks.begin(); j != (*i)->sub_tasks.end(); ++j)
@@ -772,10 +774,9 @@ Renderer::find_deps(const Task::List &list, long long batch_index) const
 		Task::Handle task = *i;
 		Task::RendererData &task_rd = task->renderer_data;
 
+		task_rd.deps     .insert(task_rd.tmp_deps     .begin(), task_rd.tmp_deps     .end());
 		task_rd.back_deps.insert(task_rd.tmp_back_deps.begin(), task_rd.tmp_back_deps.end());
-		task_rd.deps_count = (int)task_rd.deps.size() + (int)task_rd.tmp_deps.size();
 
-		task_rd.deps.clear();
 		task_rd.tmp_deps.clear();
 		task_rd.tmp_back_deps.clear();
 	}
@@ -846,9 +847,9 @@ Renderer::enqueue(const Task::List &list, const TaskEvent::Handle &finish_event_
 
 	if (finish_event_task)
 	{
+		finish_event_task->renderer_data.deps.insert(optimized_list.begin(), optimized_list.end());
 		for(Task::List::const_iterator i = optimized_list.begin(); i != optimized_list.end(); ++i)
-			if ((*i)->renderer_data.back_deps.insert(finish_event_task).second)
-				++finish_event_task->renderer_data.deps_count;
+			(*i)->renderer_data.back_deps.insert(finish_event_task);
 		optimized_list.push_back(finish_event_task);
 	}
 
@@ -880,6 +881,18 @@ Renderer::log(
 	if (t)
 	{
 		const Task::RendererData &trd = t->renderer_data;
+
+		String deps;
+		if (!trd.deps.empty())
+		{
+			std::multiset<int> deps_set;
+			for(Task::Set::const_iterator i = trd.deps.begin(); i != trd.deps.end(); ++i)
+				deps_set.insert((*i)->renderer_data.index);
+			for(std::multiset<int>::const_iterator i = deps_set.begin(); i != deps_set.end(); ++i)
+				deps += etl::strprintf("%d ", *i);
+			deps = "(" + deps.substr(0, deps.size()-1) + ") ";
+		}
+
 		String back_deps;
 		if (!trd.back_deps.empty())
 		{
@@ -910,9 +923,7 @@ Renderer::log(
 		      String(level*2, ' ')
 			+ (use_stack ? "*" : "")
 			+ (trd.index ? etl::strprintf("#%05d-%04d ", trd.batch_index, trd.index): "")
-			+ ( trd.deps_count
-			  ? etl::strprintf("%d ", trd.deps_count )
-			  : "" )
+			+ deps
 			+ back_deps
 			+ t->get_token()->name
 			+ ( t->get_bounds().valid()

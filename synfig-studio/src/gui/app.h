@@ -40,19 +40,15 @@
 #include <synfig/string.h>
 #include <synfig/time.h>
 #include <synfig/color.h>
-
+#include <synfig/layers/layer_bitmap.h>
 #include <synfig/filecontainerzip.h>
 
 #include <gtkmm/uimanager.h>
-
 #include <synfigapp/instance.h>
 #include <synfigapp/canvasinterface.h>
 #include <synfigapp/pluginmanager.h>
 #include "iconcontroller.h"
 #include "mainwindow.h"
-
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_mixer.h>
 
 /* === M A C R O S ========================================================= */
 
@@ -77,6 +73,11 @@ namespace Gtk
 	class ActionGroup;
 };
 
+namespace synfig
+{
+	class SoundProcessor;
+};
+
 namespace synfigapp
 {
 	class UIInterface;
@@ -98,6 +99,7 @@ class Dialog_Gradient;
 class Dialog_Input;
 class Dialog_Color;
 class Dialog_ToolOptions;
+class VectorizerSettings;
 class DeviceTracker;
 class AutoRecover;
 
@@ -199,7 +201,7 @@ public:
 	static Dialog_Color* dialog_color;
 //	static Dialog_Palette* dialog_palette;
 	static Dialog_ToolOptions *dialog_tool_options;
-
+	static VectorizerSettings *vectorizerpopup;
 	static synfig::Distance::System distance_system;
 
 	static synfig::Gamma gamma;
@@ -225,7 +227,7 @@ public:
 	static bool show_file_toolbar;
 
 	static synfigapp::PluginManager plugin_manager;
-
+	static synfig::String image_editor_path;
 	static std::set< synfig::String > brushes_path;
 	static synfig::String custom_filename_prefix;
 	static int preferred_x_size;
@@ -245,8 +247,8 @@ public:
 	static synfig::Color  preview_background_color;
 
 	//The sound effects that will be used
-	static Mix_Chunk* gRenderDone;
-	static bool       use_render_done_sound;
+	static synfig::SoundProcessor* sound_render_done;
+	static bool use_render_done_sound;
 
 	static Dock_Info* dock_info_; //For Render ProgressBar
 
@@ -439,6 +441,11 @@ public:
 			const std::string &button3);
 
 	static void open_uri(const std::string &uri);
+	static void open_img_in_external(const std::string &uri);
+	static void open_vectorizerpopup(const etl::handle<synfig::Layer_Bitmap> my_layer_bitmap,
+	const etl::handle<synfig::Layer> reference_layer);
+
+
 
 	static synfig::String get_config_file(const synfig::String& file);
 	// This will spread the changes made in preferences.
@@ -446,7 +453,7 @@ public:
 	// This fixes bug 1890020
 	static void setup_changed();
 
-	static void process_all_events();
+	static void process_all_events(long unsigned int us = 1);
 }; // END of class App
 
 	void delete_widget(Gtk::Widget *widget);

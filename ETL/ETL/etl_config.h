@@ -1,45 +1,14 @@
-
-
 #ifndef __ETL_CONFIG_H
 #define __ETL_CONFIG_H
 
 #include <ETL/etl_profile.h>
 #include <utility>
 
-#ifndef ETL_NAMESPACE
-# define ETL_NAMESPACE 			etl
-#endif
-
 #define ETL_DIRECTORY_SEPARATORS	"/\\"
 #define ETL_DIRECTORY_SEPARATOR0	'/'
 #define ETL_DIRECTORY_SEPARATOR1	'\\'
 
-//#ifdef	WIN32
-//#define ETL_DIRECTORY_SEPARATOR		ETL_DIRECTORY_SEPARATOR1
-//#else
 #define ETL_DIRECTORY_SEPARATOR		ETL_DIRECTORY_SEPARATOR0
-//#endif
-
-#ifndef ETL_FLAG_NONAMESPACE
-# define _ETL					ETL_NAMESPACE
-# define _ETL_BEGIN_NAMESPACE	namespace _ETL {
-# define _ETL_END_NAMESPACE		};
-# define _STD_BEGIN_NAMESPACE	namespace std {
-# define _STD_END_NAMESPACE		};
-#else
-# define _ETL
-# define _ETL_BEGIN_NAMESPACE
-# define _ETL_END_NAMESPACE
-# define _STD_BEGIN_NAMESPACE
-# define _STD_END_NAMESPACE
-#endif
-
-#define _ETL_BEGIN_CDECLS		extern "C" {
-#define _ETL_END_CDECLS			}
-
-#ifdef _REENTRANT
-#define ETL_REENTRANT	1
-#endif
 
 /* If __FUNC__ is not defined,
 ** try to define it. If we cannot,

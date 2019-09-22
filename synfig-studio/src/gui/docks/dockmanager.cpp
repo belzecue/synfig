@@ -193,22 +193,19 @@ void
 DockManager::register_dockable(Dockable& x)
 {
 	dockable_list_.push_back(&x);
-	// synfig::info("DockManager::register_dockable(): Registered dockable \"%s\"",dockable_list_.back()->get_name().c_str());
 	signal_dockable_registered()(&x);
 }
 
 bool
 DockManager::unregister_dockable(Dockable& x)
 {
-	std::list<Dockable*>::iterator iter;
-	for(iter=dockable_list_.begin();iter!=dockable_list_.end();++iter)
+	for(std::list<Dockable*>::iterator iter = dockable_list_.begin(); iter != dockable_list_.end(); ++iter)
 	{
-		if(&x==*iter)
+		if (&x == *iter)
 		{
 			remove_widget_recursive(x);
 			dockable_list_.erase(iter);
 			signal_dockable_unregistered()(&x);
-			synfig::info("DockManager::unregister_dockable(): \"%s\" has been Unregistered",x.get_name().c_str());
 			update_window_titles();
 			return true;
 		}
@@ -321,7 +318,7 @@ DockManager::remove_empty_container_recursive(Gtk::Container &container)
 	if (window)
 	{
 		if (!window->get_child())
-			window->hide();
+			window->close();
 	}
 	else
 	if (book)
@@ -364,7 +361,7 @@ DockManager::add_widget(Gtk::Widget &dest_widget, Gtk::Widget &src_widget, bool 
 	remove_widget_recursive(src_widget);
 
 	// create new paned and link all
-	Gtk::Paned *paned = manage(vertical ? (Gtk::Paned*)new Gtk::VPaned() : (Gtk::Paned*)new Gtk::HPaned());
+	Gtk::Paned *paned = manage(new Gtk::Paned(vertical ? Gtk::ORIENTATION_VERTICAL : Gtk::ORIENTATION_HORIZONTAL));
 	paned->show();
 	DockLinkPoint(paned, first).link(src_widget);
 	DockLinkPoint(paned, !first).link(dest_widget);
@@ -441,7 +438,7 @@ Gtk::Widget* DockManager::read_widget(std::string &x)
 		if (!first && second) return second;
 
 		// create paned
-		Gtk::Paned *paned = manage(hor ? (Gtk::Paned*)new Gtk::HPaned() : (Gtk::Paned*)new Gtk::VPaned());
+		Gtk::Paned *paned = manage(new Gtk::Paned(vert ? Gtk::ORIENTATION_VERTICAL : Gtk::ORIENTATION_HORIZONTAL));
 		paned->pack1(*first,  true, false);
 		paned->pack2(*second, true, false);
 		paned->set_position(size);
@@ -578,7 +575,6 @@ void DockManager::write_bool(std::string &x, bool b)
 void DockManager::write_widget(std::string &x, Gtk::Widget* widget)
 {
 	Gtk::Paned *paned = dynamic_cast<Gtk::Paned*>(widget);
-	Gtk::HPaned *hpaned = dynamic_cast<Gtk::HPaned*>(widget);
 	DockBook *book = dynamic_cast<DockBook*>(widget);
 	DockDialog *dialog = dynamic_cast<DockDialog*>(widget);
 
@@ -632,7 +628,7 @@ void DockManager::write_widget(std::string &x, Gtk::Widget* widget)
 	else
 	if (paned)
 	{
-		write_string(x, hpaned ? "[hor|" : "[vert|");
+		write_string(x, paned->get_orientation() == Gtk::ORIENTATION_HORIZONTAL ? "[hor|" : "[vert|");
 		write_int(x, paned->get_position());
 		write_separator(x);
 		write_widget(x, paned->get_child1());
@@ -719,6 +715,17 @@ std::string DockManager::layout_from_template(const std::string &tpl, float dx, 
 	return res;
 }
 
+void DockManager::set_dock_area_visibility(bool visible, DockBook* source)
+{
+	for(auto iter=dockable_list_.begin();iter!=dockable_list_.end();++iter) {
+		Dockable * dockable = *iter;
+		if (!dockable->is_visible())
+			continue;
+		DockBook * book = dynamic_cast<DockBook*>((*iter)->get_parent());
+		if (book)
+			book->set_dock_area_visibility(visible, source);
+	}
+}
 
 void
 DockManager::update_window_titles()

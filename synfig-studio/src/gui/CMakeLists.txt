@@ -2,10 +2,21 @@
 ## Configure
 ##
 
-set(STUDIO_VERSION "1.3.10")
+set(STUDIO_VERSION "1.3.11")
 set(SHOW_EXTRA_INFO OFF) # this needs some fixes to work
+set(DATA_PREFIX "${CMAKE_INSTALL_PREFIX}" CACHE PATH "Path, where the share directory with the pixmaps, sounds, plugins and translations is located. Default: Prefix, where Synfig Studio is going to be installed")
+set(IMG_EXT "png" CACHE STRING "File extension of the pixmaps (without the \".\"). Default: png")
+
 configure_file(autorevision.h.cmake.in autorevision.h)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
+
+## Defines
+add_definitions(-DIMAGE_EXT="${IMG_EXT}")
+add_definitions(-DIMAGE_DIR="${DATA_PREFIX}/share/pixmaps")
+add_definitions(-DSOUND_DIR="${DATA_PREFIX}/share/synfig/sounds")
+add_definitions(-DPLUGIN_DIR="${DATA_PREFIX}/share/synfig/plugins")
+add_definitions(-DUI_DIR="${DATA_PREFIX}/share/synfig/ui")
+add_definitions(-DLOCALEDIR="${DATA_PREFIX}/share/locale")
 
 ##
 ## Targets
@@ -35,6 +46,7 @@ target_sources(synfigstudio
         "${CMAKE_CURRENT_LIST_DIR}/preview.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/renddesc.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/render.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/resourcehelper.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/splash.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/statemanager.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/valuelink.cpp"

@@ -21,7 +21,10 @@ target_sources(synfigapp
         "${CMAKE_CURRENT_LIST_DIR}/value_desc.cpp"
 )
 
+target_link_libraries(synfigapp synfig)
+
 include(actions/CMakeLists.txt)
+include(vectorizer/CMakeLists.txt)
 
 install(
     TARGETS synfigapp

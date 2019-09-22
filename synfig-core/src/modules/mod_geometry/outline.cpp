@@ -8,7 +8,7 @@
 **	Copyright (c) 2002-2005 Robert B. Quattlebaum Jr., Adrian Bentley
 **	Copyright (c) 2007, 2008 Chris Moore
 **	Copyright (c) 2011-2013 Carlos López
-**	......... ... 2018 Ivan Mahonin
+**	......... ... 2018-2019 Ivan Mahonin
 **
 **	This package is free software; you can redistribute it and/or
 **	modify it under the terms of the GNU General Public License as
@@ -23,8 +23,6 @@
 */
 /* ========================================================================= */
 
-//! \note This whole file should be rewritten at some point (darco)
-
 /* === H E A D E R S ======================================================= */
 
 #ifdef USING_PCH
@@ -34,40 +32,33 @@
 #	include <config.h>
 #endif
 
-#include <synfig/localization.h>
-#include <synfig/general.h>
+#include <vector>
 
-#include "outline.h"
+#include <ETL/calculus>
+#include <ETL/hermite>
+
 #include <synfig/string.h>
 #include <synfig/time.h>
 #include <synfig/context.h>
 #include <synfig/paramdesc.h>
-#include <synfig/renddesc.h>
-#include <synfig/surface.h>
 #include <synfig/value.h>
 #include <synfig/valuenode.h>
 #include <synfig/canvas.h>
 
-#include <ETL/calculus>
-#include <ETL/bezier>
-#include <ETL/hermite>
-#include <vector>
-
 #include <synfig/valuenodes/valuenode_bline.h>
+#include <synfig/rendering/primitive/contour.h>
+#include <synfig/rendering/primitive/bend.h>
+
+#include "outline.h"
+
+#include <synfig/localization.h>
+#include <synfig/general.h>
 
 #endif
 
 using namespace synfig;
 
 /* === M A C R O S ========================================================= */
-
-#define SAMPLES		10
-#define ROUND_END_FACTOR	(4)
-#define CUSP_THRESHOLD		(0.40)
-#define SPIKE_AMOUNT		(4)
-#define NO_LOOP_COOKIE		synfig::Vector(84951305,7836658)
-#define EPSILON				(0.000000001)
-#define CUSP_TANGENT_ADJUST	(0.025)
 
 /* === G L O B A L S ======================================================= */
 
@@ -80,73 +71,16 @@ SYNFIG_LAYER_SET_CVS_ID(Outline,"$Id$");
 
 /* === P R O C E D U R E S ================================================= */
 
-// This function was adapted from what was
-// described on http://www.whisqu.se/per/docs/math28.htm
-Point line_intersection(
-	const Point& p1,
-	const Vector& t1,
-	const Point& p2,
-	const Vector& t2
-)
-{
-	const float& x0(p1[0]);
-	const float& y0(p1[1]);
-
-	const float x1(p1[0]+t1[0]);
-	const float y1(p1[1]+t1[1]);
-
-	const float& x2(p2[0]);
-	const float& y2(p2[1]);
-
-	const float x3(p2[0]+t2[0]);
-	const float y3(p2[1]+t2[1]);
-
-	const float near_infinity((float)1e+10);
-
-	float m1,m2;    // the slopes of each line
-
-	// compute slopes, note the kluge for infinity, however, this will
-	// be close enough
-
-	if ((x1-x0)!=0)
-	   m1 = (y1-y0)/(x1-x0);
-	else
-	   m1 = near_infinity;
-
-	if ((x3-x2)!=0)
-	   m2 = (y3-y2)/(x3-x2);
-	else
-	   m2 = near_infinity;
-
-	// compute constants
-	const float& a1(m1);
-	const float& a2(m2);
-	const float b1(-1.0f);
-	const float b2(-1.0f);
-	const float c1(y0-m1*x0);
-	const float c2(y2-m2*x2);
-
-	// compute the inverse of the determinate
-	const float det_inv(1.0f/(a1*b2 - a2*b1));
-
-	// use Kramers rule to compute the intersection
-	return Point(
-		((b1*c2 - b2*c1)*det_inv),
-		((a2*c1 - a1*c2)*det_inv)
-	);
-} // end Intersect_Lines
-
 /* === M E T H O D S ======================================================= */
 
 
 Outline::Outline()
 {
-	old_version=false;
+	old_version = false;
 	param_round_tip[0]=ValueBase(true);
 	param_round_tip[1]=ValueBase(true);
 	param_sharp_cusps=ValueBase(true);
 	param_width=ValueBase(Real(1.0f));
-	param_loopyness=ValueBase(Real(1.0f));
 	param_expand=ValueBase(Real(0));
 	param_homogeneous_width=ValueBase(true);
 	clear();
@@ -166,8 +100,6 @@ Outline::Outline()
 	bline_point_list[2].set_width(1.0f);
 	param_bline.set_list_of(bline_point_list);
 
-	needs_sync=true;
-	
 	SET_INTERPOLATION_DEFAULTS();
 	SET_STATIC_DEFAULTS();
 }
@@ -180,24 +112,22 @@ Outline::Outline()
 void
 Outline::sync_vfunc()
 {
-	const BLinePoint blank;
-
-	bool round_tip[2];
-	round_tip[0]     = param_round_tip[0].get(bool());
-	round_tip[1]     = param_round_tip[1].get(bool());
-	bool sharp_cusps = param_sharp_cusps.get(bool());
-	Real width       = param_width.get(Real());
-	Real expand      = param_expand.get(Real());
-	bool homogeneous_width = param_homogeneous_width.get(bool());
-	
 	clear();
+	if (param_bline.get_list().empty()) return;
 
-	if (param_bline.get_list().empty()) {
-		synfig::warning(
-			std::string("Outline::sync():")
-		  + N_("No vertices in outline " + std::string("\"") + get_description() + std::string("\"")) );
-		return;
-	}
+	const BLinePoint blank;
+	const int wire_segments = 16;
+	const int contour_segments = 8;
+	
+	const Real width  = param_width.get(Real());
+	const Real expand = param_expand.get(Real());
+	const bool sharp_cusps = param_sharp_cusps.get(bool());
+	const bool homogeneous_width = param_homogeneous_width.get(bool());
+	const bool round_tip[] = {
+		param_round_tip[0].get(bool()),
+		param_round_tip[1].get(bool()) };
+	const Real round_tip_k0 = 0.5*sqrt(2);
+	const Real round_tip_k1 = sqrt(2) - 1;
 
 	try {
 		const bool loop = param_bline.get_loop();
@@ -210,199 +140,75 @@ Outline::sync_vfunc()
 		}
 		const ValueBase::List &bline = bline_segment.is_valid() ? bline_segment.get_list() : param_bline.get_list();
 
-		// Retrieve the parent canvas grow value
+		// retrieve the parent canvas grow value
 		Real gv = exp(get_outline_grow_mark());
-
-		CurveList side_a, side_b;
-
-		// 				iter	next
-		//				----	----
-		// looped		nth		1st
-		// !looped		1st		2nd
-		const ValueBase::List::const_iterator end = bline.end();
-		ValueBase::List::const_iterator next = bline.begin();
-		ValueBase::List::const_iterator iter = loop ? --bline.end(): next++;
-
-		const BLinePoint &first_point = iter->get(blank);
-		Vector first_tangent = bline.front().get(blank).get_tangent2();
-		Vector last_tangent = first_point.get_tangent1();
-
-		// if we are looped and drawing sharp cusps, we'll need a value for the incoming tangent
-		if (loop && sharp_cusps && last_tangent.is_equal_to(Vector::zero())) {
-			ValueBase::List::const_iterator prev = iter; --prev;
-			const BLinePoint &prev_point = prev->get(blank);
-			etl::hermite<Vector> curve(
-				prev_point.get_vertex(),
-				first_point.get_vertex(),
-				prev_point.get_tangent2(),
-				first_point.get_tangent1() );
-			const etl::derivative< etl::hermite<Vector> > deriv(curve);
-			last_tangent = deriv(1.0 - CUSP_TANGENT_ADJUST);
-		}
-
-		// `first' is for making the cusps; don't do that for the first point if we're not looped
-		for(bool first=!loop; next!=end; iter=next++) {
-			const BLinePoint &bp1 = iter->get(blank);
-			const BLinePoint &bp2 = next->get(blank);
-
-			Vector prev_t(bp1.get_tangent1());
-			Vector iter_t(bp1.get_tangent2());
-			Vector next_t(bp2.get_tangent1());
-
-			bool split_flag(bp1.get_split_tangent_angle() || bp1.get_split_tangent_radius());
-
-			// if iter.t2 == 0 and next.t1 == 0, this is a straight line
-			if(iter_t.is_equal_to(Vector::zero()) && next_t.is_equal_to(Vector::zero())) {
-				iter_t = next_t = bp2.get_vertex() - bp1.get_vertex();
-
-				// if the two points are on top of each other, ignore this segment
-				// leave `first' true if was before
-				if (iter_t.is_equal_to(Vector::zero()))
-					continue;
-			}
-
-			// Setup the curve
-			etl::hermite<Vector> curve(
-				bp1.get_vertex(),
-				bp2.get_vertex(),
-				iter_t,
-				next_t
-			);
-
-			const Real iter_w = gv*(bp1.get_width()*width*0.5 + expand);
-			const Real next_w = gv*(bp2.get_width()*width*0.5 + expand);
-
-			const etl::derivative< etl::hermite<Vector> > deriv(curve);
-
-			if (first)
-				first_tangent = deriv(CUSP_TANGENT_ADJUST);
-
-			// Make cusps as necessary
-			if ( !first
-			  && sharp_cusps
-			  && split_flag
-			  && (!prev_t.is_equal_to(iter_t) || iter_t.is_equal_to(Vector::zero()))
-			  && !last_tangent.is_equal_to(Vector::zero()))
-			{
-				Vector curr_tangent(deriv(CUSP_TANGENT_ADJUST));
-
-				const Vector t1(last_tangent.perp().norm());
-				const Vector t2(curr_tangent.perp().norm());
-
-				Real cross(t1*t2.perp());
-				Real perp((t1-t2).mag());
-				if (cross > CUSP_THRESHOLD) {
-					const Point p1(bp1.get_vertex() + t1*iter_w);
-					const Point p2(bp1.get_vertex() + t2*iter_w);
-					side_a.push_back( CurvePoint(line_intersection(p1, last_tangent, p2, curr_tangent)) );
-				} else
-				if (cross < -CUSP_THRESHOLD) {
-					const Point p1(bp1.get_vertex() - t1*iter_w);
-					const Point p2(bp1.get_vertex() - t2*iter_w);
-					side_b.push_back( CurvePoint(line_intersection(p1, last_tangent, p2, curr_tangent)) );
-				} else
-				if (cross > 0.0 && perp > 1.0) {
-					Real amount = std::max(Real(0.0), cross/CUSP_THRESHOLD)*(SPIKE_AMOUNT - 1.0) + 1.0;
-					side_a.push_back( CurvePoint(bp1.get_vertex() + (t1 + t2).norm()*iter_w*amount) );
-				} else
-				if(cross<0 && perp>1) {
-					Real amount = std::max(Real(0.0), -cross/CUSP_THRESHOLD)*(SPIKE_AMOUNT - 1.0) + 1.0;
-					side_b.push_back( CurvePoint(bp1.get_vertex() - (t1 + t2).norm()*iter_w*amount) );
-				}
-			}
-
-			// Precalculate positions and coefficients
-			Real length = 0.0;
-			Vector points[SAMPLES+2];
-			Real dists[SAMPLES+2];
-			Vector *p = points;
-			for(Real n = 0.0, *ds = dists; n < 1.000001; n += 1.0/SAMPLES, ++p, ++ds) {
-				*p = curve(n);
-				*ds = n ? (length += (*p - *(p-1)).mag()) : 0.0;
-			}
-			length += (curve(1.0) - *(p-1)).mag();
-			const Real div_length = length > EPSILON ? 1.0/length : 1.0;
-
-			// Make the outline
-			p = points;
-			Vector pt = deriv(CUSP_TANGENT_ADJUST)/3.0;
-			for(Real n = 0.0, *ds = dists; n < 1.000001; n += 1.0/SAMPLES, ++p, ++ds) {
-				const Vector t = deriv(n > CUSP_TANGENT_ADJUST ? n : CUSP_TANGENT_ADJUST)/3.0;
-				const Vector d = t.perp().norm();
-				const Real k = homogeneous_width ? (*ds)*div_length : n;
-				const Real w = (next_w - iter_w)*k + iter_w;
-				if (false && n) {
-					// create curve
-					Vector a = *(p-1) + d*w;
-					Vector b = *p + d*w;
-					Real tk = (b - a).mag()*div_length;
-					side_a.push_back( CurvePoint(b, a + pt*tk, b - t*tk) );
-
-					a = *(p-1) - d*w;
-					b = *p - d*w;
-					tk = (b - a).mag()*div_length;
-					side_b.push_back( CurvePoint(b, a + pt*tk, b - t*tk) );
+		
+		rendering::Bend bend;
+		rendering::Contour contour;
+		
+		Real w = 0, w0 = 0;
+		for(ValueBase::List::const_iterator i = bline.begin(); i != bline.end(); ++i) {
+			const BLinePoint &point = i->get(blank);
+			
+			bend.add(
+				point.get_vertex(),
+				point.get_tangent1(),
+				point.get_tangent2(),
+				sharp_cusps ? rendering::Bend::CORNER : rendering::Bend::ROUND,
+				homogeneous_width,
+				wire_segments );
+			Real length = bend.length1();
+			
+			w = gv*(point.get_width()*width*0.5 + expand);
+			
+			if (i == bline.begin()) {
+				w0 = w;
+				if (loop) {
+					contour.move_to( Vector(-w, 0) );
+					contour.line_to( Vector(-w, w) );
 				} else {
-					side_a.push_back( CurvePoint(*p + d*w) );
-					side_b.push_back( CurvePoint(*p - d*w) );
+					if (round_tip[0]) {
+						contour.move_to( Vector(-w, 0) );
+						contour.conic_to(
+							Vector(-round_tip_k0*w, round_tip_k0*w),
+							Vector(-w, round_tip_k1*w) );
+						contour.conic_to(
+							Vector(0, w),
+							Vector(-round_tip_k1*w, w) );
+					} else {
+						contour.move_to( Vector(0, 0) );
+						contour.line_to( Vector(0, w) );
+					}
 				}
-				pt = t;
 			}
 
-			last_tangent = deriv(1.0 - CUSP_TANGENT_ADJUST);
-			side_a.push_back( CurvePoint(curve(1.0) + last_tangent.perp().norm()*next_w) );
-			side_b.push_back( CurvePoint(curve(1.0) - last_tangent.perp().norm()*next_w) );
-
-			first = false;
+			contour.line_to( Vector(length, w) );
 		}
-
-		if (side_a.size() < 2 || side_b.size() < 2) return;
-
-		move_to(side_a.front().p);
-
+		
 		if (loop) {
-			add(side_a);
-			add_reverse(side_b);
+			bend.loop(homogeneous_width, wire_segments);
+			Real length = bend.length1();
+			contour.line_to( Vector(length, w0) );
+			contour.line_to( Vector(length + w0, w0) );
+			contour.line_to( Vector(length + w0, 0) );
 		} else {
-			// Insert code for adding end tip
+			bend.tails();
+			Real length = bend.length1();
 			if (round_tip[1]) {
-				const BLinePoint &bp = bline.back().get(blank);
-				const Point vertex = bp.get_vertex();
-				const Vector tangent = last_tangent.norm();
-				const Real w = gv*(bp.get_width()*width*0.5 + expand);
-
-				Vector a = vertex + tangent.perp()*w;
-				Vector b = vertex - tangent.perp()*w;
-				Vector p1 = a + tangent*w*(ROUND_END_FACTOR/3.0);
-				Vector p2 = b + tangent*w*(ROUND_END_FACTOR/3.0);
-
-				// replace the last point
-				side_a.back() = CurvePoint(a);
-				add(side_a);
-				add(CurvePoint(b, p1, p2));
-			} else add(side_a);
-
-			// Insert code for adding begin tip
-			if (round_tip[0]) {
-				const BLinePoint &bp = bline.front().get(blank);
-				const Point &vertex = bp.get_vertex();
-				const Vector tangent = first_tangent.norm();
-				const Real w = gv*(bp.get_width()*width*0.5 + expand);
-
-				Vector a = vertex - tangent.perp()*w;
-				Vector b = vertex + tangent.perp()*w;
-				Vector p1 = a - tangent*w*(ROUND_END_FACTOR/3.0);
-				Vector p2 = b - tangent*w*(ROUND_END_FACTOR/3.0);
-
-				// replace the first point
-				side_b.front() = CurvePoint(a);
-				add_reverse(side_b);
-				add(CurvePoint(b, p1, p2));
-			} else add_reverse(side_b);
+				contour.conic_to(
+					Vector(length + round_tip_k0*w, round_tip_k0*w),
+					Vector(length + round_tip_k1*w, w) );
+				contour.conic_to(
+					Vector(length + w, 0),
+					Vector(length + w, round_tip_k1*w) );
+			} else {
+				contour.line_to( Vector(length, 0) );
+			}
 		}
+		
+		contour.close_mirrored_vert();
+		bend.bend(shape_contour(), contour, Matrix(), contour_segments);
 	} catch (...) { synfig::error("Outline::sync(): Exception thrown"); throw; }
-
-	close();
 }
 
 bool
@@ -434,7 +240,6 @@ Outline::set_shape_param(const String & param, const ValueBase &value)
 	IMPORT_VALUE(param_round_tip[1]);
 	IMPORT_VALUE(param_sharp_cusps);
 	IMPORT_VALUE_PLUS(param_width,if(old_version){param_width.set(param_width.get(Real())*2.0);});
-	IMPORT_VALUE(param_loopyness);
 	IMPORT_VALUE(param_expand);
 	IMPORT_VALUE(param_homogeneous_width);
 
@@ -451,7 +256,6 @@ Outline::get_param(const String& param)const
 	EXPORT_VALUE(param_round_tip[1]);
 	EXPORT_VALUE(param_sharp_cusps);
 	EXPORT_VALUE(param_width);
-	EXPORT_VALUE(param_loopyness);
 
 	EXPORT_NAME();
 	EXPORT_VERSION();
@@ -496,10 +300,6 @@ Outline::get_param_vocab()const
 	ret.push_back(ParamDesc("round_tip[1]")
 		.set_local_name(_("Rounded End"))
 		.set_description(_("Round off the tip"))
-	);
-	ret.push_back(ParamDesc("loopyness")
-		.set_local_name(_("Loopyness"))
-		.set_description(_("(Currently not used)"))
 	);
 	ret.push_back(ParamDesc("homogeneous_width")
 		.set_local_name(_("Homogeneous"))
